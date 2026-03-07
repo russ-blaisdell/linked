@@ -1,0 +1,76 @@
+{
+  "elements": [
+    {
+      "entityUrn": "urn:li:msg_conversation:(urn:li:member:123456789,2-abc111)",
+      "read": false,
+      "lastActivityAt": 1741305600000,
+      "participants": [
+        {
+          "com.linkedin.voyager.messaging.MessagingMember": {
+            "entityUrn": "urn:li:member:987654321",
+            "publicIdentifier": "john-smith",
+            "firstName": "John",
+            "lastName": "Smith",
+            "occupation": "Engineering Manager at TechCorp"
+          }
+        }
+      ],
+      "events": [
+        {
+          "eventContent": {
+            "com.linkedin.voyager.messaging.event.MessageEvent": {
+              "attributedBody": {
+                "text": "Hey, would you be interested in discussing an opportunity?"
+              }
+            }
+          },
+          "from": {
+            "com.linkedin.voyager.messaging.MessagingMember": {
+              "entityUrn": "urn:li:member:987654321",
+              "publicIdentifier": "john-smith",
+              "firstName": "John",
+              "lastName": "Smith"
+            }
+          },
+          "createdAt": 1741305600000
+        }
+      ]
+    },
+    {
+      "entityUrn": "urn:li:msg_conversation:(urn:li:member:123456789,2-abc222)",
+      "read": true,
+      "lastActivityAt": 1741219200000,
+      "participants": [
+        {
+          "com.linkedin.voyager.messaging.MessagingMember": {
+            "entityUrn": "urn:li:member:111222333",
+            "publicIdentifier": "alice-jones",
+            "firstName": "Alice",
+            "lastName": "Jones",
+            "occupation": "Product Manager at StartupXYZ"
+          }
+        }
+      ],
+      "events": [
+        {
+          "eventContent": {
+            "com.linkedin.voyager.messaging.event.MessageEvent": {
+              "attributedBody": {
+                "text": "Great connecting with you at the conference!"
+              }
+            }
+          },
+          "from": {
+            "com.linkedin.voyager.messaging.MessagingMember": {
+              "entityUrn": "urn:li:member:111222333",
+              "firstName": "Alice",
+              "lastName": "Jones"
+            }
+          },
+          "createdAt": 1741219200000
+        }
+      ]
+    }
+  ],
+  "paging": { "start": 0, "count": 20, "total": 2 }
+}

@@ -1,0 +1,20 @@
+{
+  "entityUrn": "urn:li:jobPosting:987654321",
+  "title": "Senior Go Engineer",
+  "description": {
+    "text": "We are looking for a Senior Go Engineer to join our platform team. You will build high-throughput distributed systems and mentor junior engineers.\n\nRequirements:\n- 5+ years of Go experience\n- Strong background in distributed systems\n- Experience with Kubernetes and cloud platforms"
+  },
+  "companyDetails": {
+    "com.linkedin.voyager.jobs.JobPostingCompany": {
+      "entityUrn": "urn:li:company:1234",
+      "name": "TechCorp",
+      "universalName": "techcorp"
+    }
+  },
+  "formattedLocation": "San Francisco, CA",
+  "workRemoteAllowed": true,
+  "listedAt": 1741219200000,
+  "expireAt": 1743811200000,
+  "formattedEmploymentStatus": "Full-time",
+  "formattedExperienceLevel": "Mid-Senior level"
+}

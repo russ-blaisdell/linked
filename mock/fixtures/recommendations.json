@@ -1,0 +1,26 @@
+{
+  "elements": [
+    {
+      "entityUrn": "urn:li:recommendation:rec001",
+      "id": "rec001",
+      "recommender": {
+        "entityUrn": "urn:li:member:111000001",
+        "publicIdentifier": "bob-builder",
+        "firstName": "Bob",
+        "lastName": "Builder",
+        "occupation": "Staff Engineer at BigCo"
+      },
+      "recommendee": {
+        "entityUrn": "urn:li:member:123456789",
+        "publicIdentifier": "jane-doe",
+        "firstName": "Jane",
+        "lastName": "Doe"
+      },
+      "relationship": "COLLEAGUE",
+      "recommendationText": "Jane is an exceptional engineer who consistently delivers high-quality work. Her deep knowledge of distributed systems and ability to mentor junior team members makes her an invaluable asset.",
+      "createdAt": 1720000000000,
+      "status": "VISIBLE"
+    }
+  ],
+  "paging": { "start": 0, "count": 20, "total": 1 }
+}

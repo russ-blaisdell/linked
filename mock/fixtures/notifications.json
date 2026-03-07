@@ -1,0 +1,24 @@
+{
+  "elements": [
+    {
+      "entityUrn": "urn:li:notification:aaa111",
+      "notificationType": "CONNECTION_REQUEST",
+      "headlineText": { "text": "John Smith wants to connect with you" },
+      "createdAt": 1741305600000
+    },
+    {
+      "entityUrn": "urn:li:notification:bbb222",
+      "notificationType": "PROFILE_VIEW",
+      "headlineText": { "text": "5 people viewed your profile this week" },
+      "readAt": 1741219200000,
+      "createdAt": 1741219200000
+    },
+    {
+      "entityUrn": "urn:li:notification:ccc333",
+      "notificationType": "POST_LIKE",
+      "headlineText": { "text": "Alice Jones and 3 others liked your post" },
+      "createdAt": 1741132800000
+    }
+  ],
+  "paging": { "start": 0, "count": 20, "total": 3 }
+}

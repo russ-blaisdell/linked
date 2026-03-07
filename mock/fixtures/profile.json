@@ -1,0 +1,66 @@
+{
+  "data": {},
+  "included": [
+    {
+      "entityUrn": "urn:li:member:123456789",
+      "publicIdentifier": "jane-doe",
+      "miniProfile": {
+        "entityUrn": "urn:li:member:123456789",
+        "publicIdentifier": "jane-doe",
+        "firstName": "Jane",
+        "lastName": "Doe",
+        "occupation": "Senior Software Engineer at Acme Corp",
+        "picture": {
+          "rootUrl": "https://media.licdn.com/dms/image/",
+          "artifacts": [
+            { "fileIdentifyingUrlPathSegment": "profile-photo-200.jpg" },
+            { "fileIdentifyingUrlPathSegment": "profile-photo-400.jpg" }
+          ]
+        }
+      },
+      "summary": "Passionate software engineer with 10+ years of experience building distributed systems and developer tools.",
+      "industry": { "localizedName": "Software Development" },
+      "profileTopPosition": [
+        {
+          "title": "Senior Software Engineer",
+          "companyName": "Acme Corp",
+          "geoLocationName": "San Francisco, CA",
+          "description": "Lead engineer on the platform team.",
+          "dateRange": {
+            "start": { "year": 2020 }
+          }
+        },
+        {
+          "title": "Software Engineer",
+          "companyName": "Beta Inc",
+          "geoLocationName": "New York, NY",
+          "description": "Full-stack engineer.",
+          "dateRange": {
+            "start": { "year": 2017 },
+            "end": { "year": 2020 }
+          }
+        }
+      ],
+      "education": [
+        {
+          "schoolName": "MIT",
+          "degreeName": "B.S.",
+          "fieldOfStudy": "Computer Science",
+          "dateRange": {
+            "start": { "year": 2013 },
+            "end": { "year": 2017 }
+          }
+        }
+      ],
+      "skills": [
+        { "name": "Go", "numEndorsers": 42 },
+        { "name": "Distributed Systems", "numEndorsers": 38 },
+        { "name": "Kubernetes", "numEndorsers": 27 }
+      ],
+      "languages": [
+        { "name": "English", "proficiency": "NATIVE_OR_BILINGUAL" },
+        { "name": "Spanish", "proficiency": "PROFESSIONAL_WORKING" }
+      ]
+    }
+  ]
+}

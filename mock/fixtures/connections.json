@@ -1,0 +1,27 @@
+{
+  "elements": [
+    {
+      "entityUrn": "urn:li:connection:(urn:li:member:123456789,urn:li:member:111000001)",
+      "miniProfile": {
+        "entityUrn": "urn:li:member:111000001",
+        "publicIdentifier": "bob-builder",
+        "firstName": "Bob",
+        "lastName": "Builder",
+        "occupation": "Staff Engineer at BigCo"
+      },
+      "connectedAt": 1700000000000
+    },
+    {
+      "entityUrn": "urn:li:connection:(urn:li:member:123456789,urn:li:member:111000002)",
+      "miniProfile": {
+        "entityUrn": "urn:li:member:111000002",
+        "publicIdentifier": "carol-dev",
+        "firstName": "Carol",
+        "lastName": "Dev",
+        "occupation": "CTO at StartupABC"
+      },
+      "connectedAt": 1710000000000
+    }
+  ],
+  "paging": { "start": 0, "count": 20, "total": 2 }
+}

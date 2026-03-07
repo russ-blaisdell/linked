@@ -26,9 +26,9 @@ type voyagerMessageEvent struct {
 }
 
 type voyagerConversationEvent struct {
-	EntityURN    string `json:"entityUrn"`
-	CreatedAt    int64  `json:"createdAt"`
-	DeliveredAt  int64  `json:"deliveredAt,omitempty"`
+	EntityURN   string `json:"entityUrn"`
+	CreatedAt   int64  `json:"createdAt"`
+	DeliveredAt int64  `json:"deliveredAt,omitempty"`
 	EventContent struct {
 		MessageEvent voyagerMessageEvent `json:"com.linkedin.voyager.messaging.event.MessageEvent"`
 	} `json:"eventContent"`
@@ -40,6 +40,8 @@ type voyagerConversationEvent struct {
 type voyagerConversation struct {
 	EntityURN      string `json:"entityUrn"`
 	Read           bool   `json:"read"`
+	Starred        bool   `json:"starred,omitempty"`
+	Archived       bool   `json:"archived,omitempty"`
 	LastActivityAt int64  `json:"lastActivityAt"`
 	Participants   []struct {
 		MiniProfile voyagerMiniProfile `json:"com.linkedin.voyager.messaging.MessagingMember"`
@@ -208,12 +210,50 @@ func (s *MessagingService) MarkRead(conversationID string) error {
 	return s.c.Put(path, map[string]interface{}{"read": true}, nil)
 }
 
+// StarConversation stars (bookmarks) a conversation.
+func (s *MessagingService) StarConversation(conversationID string) error {
+	path := fmt.Sprintf(client.EndpointConversationByID, conversationID)
+	return s.c.Put(path, map[string]interface{}{"starred": true}, nil)
+}
+
+// UnstarConversation removes the star from a conversation.
+func (s *MessagingService) UnstarConversation(conversationID string) error {
+	path := fmt.Sprintf(client.EndpointConversationByID, conversationID)
+	return s.c.Put(path, map[string]interface{}{"starred": false}, nil)
+}
+
+// ArchiveConversation archives a conversation.
+func (s *MessagingService) ArchiveConversation(conversationID string) error {
+	path := fmt.Sprintf(client.EndpointConversationByID, conversationID)
+	return s.c.Put(path, map[string]interface{}{"archived": true}, nil)
+}
+
+// UnarchiveConversation restores an archived conversation.
+func (s *MessagingService) UnarchiveConversation(conversationID string) error {
+	path := fmt.Sprintf(client.EndpointConversationByID, conversationID)
+	return s.c.Put(path, map[string]interface{}{"archived": false}, nil)
+}
+
+// DeleteMessage deletes a specific message from a conversation.
+func (s *MessagingService) DeleteMessage(conversationID, messageURN string) error {
+	path := fmt.Sprintf(client.EndpointMessageEventByID, conversationID, urnToID(messageURN))
+	return s.c.Delete(path)
+}
+
+// DeleteConversation deletes an entire conversation.
+func (s *MessagingService) DeleteConversation(conversationID string) error {
+	path := fmt.Sprintf(client.EndpointConversationByID, conversationID)
+	return s.c.Delete(path)
+}
+
 // mapVoyagerConversation converts a raw conversation to models.Conversation.
 func mapVoyagerConversation(vc voyagerConversation) models.Conversation {
 	conv := models.Conversation{
 		URN:       vc.EntityURN,
 		ID:        urnToID(vc.EntityURN),
 		Unread:    !vc.Read,
+		Starred:   vc.Starred,
+		Archived:  vc.Archived,
 		UpdatedAt: msToTime(vc.LastActivityAt),
 	}
 	for _, p := range vc.Participants {

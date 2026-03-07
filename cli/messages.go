@@ -20,6 +20,13 @@ func newMessagesCmd() *cobra.Command {
 		newMessagesReadCmd(),
 		newMessagesSendCmd(),
 		newMessagesUnreadCmd(),
+		newMessagesMarkReadCmd(),
+		newMessagesStarCmd(),
+		newMessagesUnstarCmd(),
+		newMessagesArchiveCmd(),
+		newMessagesUnarchiveCmd(),
+		newMessagesDeleteCmd(),
+		newMessagesDeleteConversationCmd(),
 	)
 	return cmd
 }
@@ -220,6 +227,167 @@ func newMessagesUnreadCmd() *cobra.Command {
 	cmd.Flags().IntVar(&start, "start", 0, "Pagination offset")
 	cmd.Flags().IntVar(&count, "count", 20, "Number of conversations")
 	return cmd
+}
+
+func newMessagesMarkReadCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "mark-read <conversation-id>",
+		Short: "Mark a conversation as read",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			if err := li.Messaging.MarkRead(args[0]); err != nil {
+				return err
+			}
+			p.Success("Conversation marked as read")
+			return nil
+		},
+	}
+}
+
+func newMessagesStarCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "star <conversation-id>",
+		Short: "Star (bookmark) a conversation",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			if err := li.Messaging.StarConversation(args[0]); err != nil {
+				return err
+			}
+			p.Success("Conversation starred")
+			return nil
+		},
+	}
+}
+
+func newMessagesUnstarCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "unstar <conversation-id>",
+		Short: "Remove star from a conversation",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			if err := li.Messaging.UnstarConversation(args[0]); err != nil {
+				return err
+			}
+			p.Success("Conversation unstarred")
+			return nil
+		},
+	}
+}
+
+func newMessagesArchiveCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "archive <conversation-id>",
+		Short: "Archive a conversation",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			if err := li.Messaging.ArchiveConversation(args[0]); err != nil {
+				return err
+			}
+			p.Success("Conversation archived")
+			return nil
+		},
+	}
+}
+
+func newMessagesUnarchiveCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "unarchive <conversation-id>",
+		Short: "Restore an archived conversation",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			if err := li.Messaging.UnarchiveConversation(args[0]); err != nil {
+				return err
+			}
+			p.Success("Conversation unarchived")
+			return nil
+		},
+	}
+}
+
+func newMessagesDeleteCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete <conversation-id> <message-urn>",
+		Short: "Delete a specific message from a conversation",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			if err := li.Messaging.DeleteMessage(args[0], args[1]); err != nil {
+				return err
+			}
+			p.Success("Message deleted")
+			return nil
+		},
+	}
+}
+
+func newMessagesDeleteConversationCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete-conversation <conversation-id>",
+		Short: "Delete an entire conversation",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			if err := li.Messaging.DeleteConversation(args[0]); err != nil {
+				return err
+			}
+			p.Success("Conversation deleted")
+			return nil
+		},
+	}
 }
 
 // participantNames returns a comma-joined list of participant names.

@@ -18,14 +18,14 @@ func NewRecommendationsService(c *client.Client) *RecommendationsService {
 }
 
 type voyagerRecommendation struct {
-	EntityURN   string             `json:"entityUrn"`
-	ID          string             `json:"id,omitempty"`
-	Recommender voyagerMiniProfile `json:"recommender,omitempty"`
-	Recommendee voyagerMiniProfile `json:"recommendee,omitempty"`
-	Relationship string            `json:"relationship,omitempty"`
-	RecommendationText string      `json:"recommendationText,omitempty"`
-	CreatedAt   int64              `json:"createdAt,omitempty"`
-	Status      string             `json:"status,omitempty"`
+	EntityURN          string             `json:"entityUrn"`
+	ID                 string             `json:"id,omitempty"`
+	Recommender        voyagerMiniProfile `json:"recommender,omitempty"`
+	Recommendee        voyagerMiniProfile `json:"recommendee,omitempty"`
+	Relationship       string             `json:"relationship,omitempty"`
+	RecommendationText string             `json:"recommendationText,omitempty"`
+	CreatedAt          int64              `json:"createdAt,omitempty"`
+	Status             string             `json:"status,omitempty"`
 }
 
 // ListReceived returns recommendations received by the authenticated user.
@@ -96,14 +96,26 @@ func (s *RecommendationsService) RequestRecommendation(input models.Recommendati
 
 // HideRecommendation hides a received recommendation from the profile.
 func (s *RecommendationsService) HideRecommendation(recommendationURN string) error {
-	path := fmt.Sprintf("%s/%s", client.EndpointRecommendations, urnToID(recommendationURN))
+	path := fmt.Sprintf(client.EndpointRecommendationByID, urnToID(recommendationURN))
 	return s.c.Put(path, map[string]interface{}{"status": "HIDDEN"}, nil)
 }
 
 // ShowRecommendation makes a previously hidden recommendation visible again.
 func (s *RecommendationsService) ShowRecommendation(recommendationURN string) error {
-	path := fmt.Sprintf("%s/%s", client.EndpointRecommendations, urnToID(recommendationURN))
+	path := fmt.Sprintf(client.EndpointRecommendationByID, urnToID(recommendationURN))
 	return s.c.Put(path, map[string]interface{}{"status": "VISIBLE"}, nil)
+}
+
+// DeclineRecommendation declines a pending recommendation request.
+func (s *RecommendationsService) DeclineRecommendation(recommendationURN string) error {
+	path := fmt.Sprintf(client.EndpointRecommendationByID, urnToID(recommendationURN))
+	return s.c.Put(path, map[string]interface{}{"status": "REJECTED"}, nil)
+}
+
+// DeleteRecommendation deletes a recommendation you have given.
+func (s *RecommendationsService) DeleteRecommendation(recommendationURN string) error {
+	path := fmt.Sprintf(client.EndpointRecommendationByID, urnToID(recommendationURN))
+	return s.c.Delete(path)
 }
 
 // mapPagedRecommendations converts raw recommendations to the paged model.

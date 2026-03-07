@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -229,8 +228,22 @@ func (s *SearchService) SearchPosts(keywords string, start, count int) (*models.
 	}
 
 	var raw struct {
-		Elements []json.RawMessage `json:"elements"`
-		Paging   struct {
+		Elements []struct {
+			Items []struct {
+				Item struct {
+					EntityUrn string `json:"entityUrn"`
+					Activity  struct {
+						EntityUrn  string `json:"entityUrn"`
+						UpdateText struct {
+							Text string `json:"text"`
+						} `json:"updateText,omitempty"`
+						TotalLikes    int   `json:"totalLikes,omitempty"`
+						CreatedAt     int64 `json:"createdAt,omitempty"`
+					} `json:"com.linkedin.voyager.search.SearchActivity,omitempty"`
+				} `json:"item"`
+			} `json:"items,omitempty"`
+		} `json:"elements"`
+		Paging struct {
 			Start int `json:"start"`
 			Count int `json:"count"`
 			Total int `json:"total"`
@@ -241,9 +254,28 @@ func (s *SearchService) SearchPosts(keywords string, start, count int) (*models.
 		return nil, fmt.Errorf("search posts: %w", err)
 	}
 
-	return &models.PagedPosts{
-		Pagination: models.Pagination{Start: start, Count: count, Total: raw.Paging.Total, HasMore: (start+count) < raw.Paging.Total},
-	}, nil
+	result := &models.PagedPosts{
+		Pagination: models.Pagination{Start: start, Count: count, Total: raw.Paging.Total, HasMore: (start + count) < raw.Paging.Total},
+	}
+	for _, group := range raw.Elements {
+		for _, el := range group.Items {
+			activity := el.Item.Activity
+			urn := activity.EntityUrn
+			if urn == "" {
+				urn = el.Item.EntityUrn
+			}
+			if urn == "" {
+				continue
+			}
+			result.Items = append(result.Items, models.Post{
+				URN:       urn,
+				Body:      activity.UpdateText.Text,
+				LikeCount: activity.TotalLikes,
+				PostedAt:  msToTime(activity.CreatedAt),
+			})
+		}
+	}
+	return result, nil
 }
 
 // buildPeopleFilters constructs the Voyager filter string for people search.

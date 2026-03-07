@@ -20,6 +20,8 @@ func newRecommendationsCmd() *cobra.Command {
 		newRecommendationsRequestCmd(),
 		newRecommendationsHideCmd(),
 		newRecommendationsShowCmd(),
+		newRecommendationsDeclineCmd(),
+		newRecommendationsDeleteCmd(),
 	)
 	return cmd
 }
@@ -187,6 +189,52 @@ func newRecommendationsShowCmd() *cobra.Command {
 				return err
 			}
 			p.Success("Recommendation now visible on profile")
+			return nil
+		},
+	}
+}
+
+func newRecommendationsDeclineCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "decline <recommendation-urn>",
+		Short: "Decline a pending recommendation request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			if err := li.Recommendations.DeclineRecommendation(args[0]); err != nil {
+				return err
+			}
+			p.Success("Recommendation declined")
+			return nil
+		},
+	}
+}
+
+func newRecommendationsDeleteCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete <recommendation-urn>",
+		Short: "Delete a recommendation you have given",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			if err := li.Recommendations.DeleteRecommendation(args[0]); err != nil {
+				return err
+			}
+			p.Success("Recommendation deleted")
 			return nil
 		},
 	}

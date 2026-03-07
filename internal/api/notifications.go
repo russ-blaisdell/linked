@@ -30,11 +30,11 @@ func (s *NotificationsService) List(start, count int) (*models.PagedNotification
 
 	var raw struct {
 		Elements []struct {
-			EntityURN   string `json:"entityUrn"`
-			ReadAt      *int64 `json:"readAt,omitempty"`
-			CreatedAt   int64  `json:"createdAt"`
+			EntityURN        string `json:"entityUrn"`
+			ReadAt           *int64 `json:"readAt,omitempty"`
+			CreatedAt        int64  `json:"createdAt"`
 			NotificationType string `json:"notificationType,omitempty"`
-			HeadlineText struct {
+			HeadlineText     struct {
 				Text string `json:"text"`
 			} `json:"headlineText,omitempty"`
 			EntityEmbeddedObject struct {
@@ -75,8 +75,25 @@ func (s *NotificationsService) List(start, count int) (*models.PagedNotification
 	return result, nil
 }
 
-// MarkRead marks a notification as read.
+// MarkRead marks a single notification as read.
 func (s *NotificationsService) MarkRead(notificationURN string) error {
 	path := fmt.Sprintf("%s/%s", client.EndpointNotifications, urnToID(notificationURN))
 	return s.c.Put(path, map[string]interface{}{"read": true}, nil)
+}
+
+// MarkAllRead marks all notifications as read.
+func (s *NotificationsService) MarkAllRead() error {
+	path := client.EndpointNotifications + "?action=markAllSeen"
+	return s.c.Post(path, map[string]interface{}{}, nil)
+}
+
+// GetBadgeCount returns the count of unread notifications.
+func (s *NotificationsService) GetBadgeCount() (*models.NotificationBadge, error) {
+	var raw struct {
+		Count int `json:"count"`
+	}
+	if err := s.c.Get(client.EndpointNotificationBadge, nil, &raw); err != nil {
+		return nil, fmt.Errorf("get notification badge: %w", err)
+	}
+	return &models.NotificationBadge{UnreadCount: raw.Count}, nil
 }

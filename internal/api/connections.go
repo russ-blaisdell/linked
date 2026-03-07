@@ -24,13 +24,13 @@ type voyagerConnection struct {
 }
 
 type voyagerInvitation struct {
-	EntityURN   string             `json:"entityUrn"`
-	ID          string             `json:"id,omitempty"`
-	FromMember  voyagerMiniProfile `json:"fromMember,omitempty"`
-	ToMember    voyagerMiniProfile `json:"toMember,omitempty"`
-	Message     string             `json:"message,omitempty"`
-	SentTime    int64              `json:"sentTime,omitempty"`
-	Status      string             `json:"status,omitempty"`
+	EntityURN  string             `json:"entityUrn"`
+	ID         string             `json:"id,omitempty"`
+	FromMember voyagerMiniProfile `json:"fromMember,omitempty"`
+	ToMember   voyagerMiniProfile `json:"toMember,omitempty"`
+	Message    string             `json:"message,omitempty"`
+	SentTime   int64              `json:"sentTime,omitempty"`
+	Status     string             `json:"status,omitempty"`
 }
 
 // ListConnections returns all 1st-degree connections.
@@ -87,10 +87,10 @@ func (s *ConnectionsService) ListPendingInvitations(start, count int) (*models.P
 		count = client.DefaultCount
 	}
 	params := map[string]string{
-		"q":           "receivedInvitation",
+		"q":              "receivedInvitation",
 		"invitationType": "CONNECTION",
-		"start":       fmt.Sprintf("%d", start),
-		"count":       fmt.Sprintf("%d", count),
+		"start":          fmt.Sprintf("%d", start),
+		"count":          fmt.Sprintf("%d", count),
 	}
 
 	var raw struct {
@@ -155,9 +155,9 @@ func (s *ConnectionsService) SendConnectionRequest(input models.ConnectionReques
 // AcceptInvitation accepts a received connection invitation.
 func (s *ConnectionsService) AcceptInvitation(invitationID, sharedSecret string) error {
 	payload := map[string]interface{}{
-		"invitationId":   invitationID,
-		"sharedSecret":   sharedSecret,
-		"action":         "accept",
+		"invitationId": invitationID,
+		"sharedSecret": sharedSecret,
+		"action":       "accept",
 	}
 	return s.c.Post(fmt.Sprintf(client.EndpointInvitationHandle, invitationID), payload, nil)
 }
@@ -174,6 +174,64 @@ func (s *ConnectionsService) IgnoreInvitation(invitationID string) error {
 // WithdrawInvitation withdraws a sent connection invitation.
 func (s *ConnectionsService) WithdrawInvitation(invitationURN string) error {
 	return s.c.Delete(fmt.Sprintf(client.EndpointInvitationHandle, urnToID(invitationURN)))
+}
+
+// RemoveConnection removes an existing 1st-degree connection.
+func (s *ConnectionsService) RemoveConnection(profileURN string) error {
+	path := fmt.Sprintf(client.EndpointConnection, urnToID(profileURN))
+	return s.c.Delete(path)
+}
+
+// GetMutualConnections returns shared connections between the authenticated user and another member.
+func (s *ConnectionsService) GetMutualConnections(profileURN string, start, count int) (*models.PagedMutualConnections, error) {
+	if count == 0 {
+		count = client.DefaultCount
+	}
+	params := map[string]string{
+		"q":         "memberAndConnection",
+		"memberUrn": profileURN,
+		"start":     fmt.Sprintf("%d", start),
+		"count":     fmt.Sprintf("%d", count),
+	}
+
+	var raw struct {
+		Elements []struct {
+			MiniProfile voyagerMiniProfile `json:"miniProfile,omitempty"`
+			Count       int                `json:"count,omitempty"`
+		} `json:"elements"`
+		Paging struct {
+			Start int `json:"start"`
+			Count int `json:"count"`
+			Total int `json:"total"`
+		} `json:"paging"`
+	}
+
+	if err := s.c.Get(client.EndpointMutualConnections, params, &raw); err != nil {
+		return nil, fmt.Errorf("get mutual connections: %w", err)
+	}
+
+	result := &models.PagedMutualConnections{
+		Pagination: models.Pagination{
+			Start:   start,
+			Count:   count,
+			Total:   raw.Paging.Total,
+			HasMore: (start + count) < raw.Paging.Total,
+		},
+	}
+	for _, el := range raw.Elements {
+		mp := el.MiniProfile
+		result.Items = append(result.Items, models.MutualConnection{
+			Profile: models.Profile{
+				URN:       mp.EntityURN,
+				ProfileID: mp.PublicID,
+				FirstName: mp.FirstName,
+				LastName:  mp.LastName,
+				Headline:  mp.Occupation,
+			},
+			Count: el.Count,
+		})
+	}
+	return result, nil
 }
 
 // FollowProfile follows a LinkedIn member (without connecting).

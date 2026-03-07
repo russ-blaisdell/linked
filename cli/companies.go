@@ -18,6 +18,7 @@ func newCompaniesCmd() *cobra.Command {
 		newCompaniesFollowCmd(),
 		newCompaniesUnfollowCmd(),
 		newCompaniesPostsCmd(),
+		newCompaniesEmployeesCmd(),
 	)
 	return cmd
 }
@@ -108,6 +109,54 @@ func newCompaniesUnfollowCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func newCompaniesEmployeesCmd() *cobra.Command {
+	var start, count int
+	cmd := &cobra.Command{
+		Use:   "employees <company-id>",
+		Short: "Search LinkedIn members who work at a company",
+		Example: `  linked companies employees google
+  linked companies employees anthropic --count 50 -o table`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			result, err := li.Companies.GetCompanyEmployees(args[0], start, count)
+			if err != nil {
+				return err
+			}
+			if p.Format() == output.FormatJSON {
+				return p.JSON(result)
+			}
+			if len(result.Items) == 0 {
+				p.Warn("No employees found")
+				return nil
+			}
+			if p.Format() == output.FormatTable {
+				rows := make([][]string, 0, len(result.Items))
+				for _, e := range result.Items {
+					rows = append(rows, []string{e.Profile.FirstName + " " + e.Profile.LastName, e.Profile.Headline, e.Profile.ProfileID})
+				}
+				p.Table([]string{"Name", "Headline", "Profile ID"}, rows)
+				return nil
+			}
+			p.Header(fmt.Sprintf("Employees at %s (%d)", args[0], result.Pagination.Total))
+			for _, e := range result.Items {
+				p.Printf("  %s %s  —  %s\n    %s\n\n", e.Profile.FirstName, e.Profile.LastName, e.Profile.Headline, e.Profile.ProfileID)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().IntVar(&start, "start", 0, "Pagination offset")
+	cmd.Flags().IntVar(&count, "count", 20, "Number of results")
+	return cmd
 }
 
 func newCompaniesPostsCmd() *cobra.Command {

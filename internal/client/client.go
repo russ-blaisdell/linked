@@ -166,3 +166,24 @@ func (c *Client) Delete(path string) error {
 	}
 	return c.do(req, nil)
 }
+
+// PutBinary performs a PUT with raw binary data to an absolute URL.
+// Used for media uploads where LinkedIn returns an external upload URL.
+func (c *Client) PutBinary(uploadURL string, data []byte, contentType string) error {
+	req, err := http.NewRequest(http.MethodPut, uploadURL, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("creating upload request: %w", err)
+	}
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("executing upload request: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return apiError(resp.StatusCode, body)
+	}
+	return nil
+}

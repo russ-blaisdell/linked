@@ -19,6 +19,8 @@ func newJobsCmd() *cobra.Command {
 		newJobsSaveCmd(),
 		newJobsUnsaveCmd(),
 		newJobsAppliedCmd(),
+		newJobsRecommendedCmd(),
+		newJobsCompanyCmd(),
 	)
 	return cmd
 }
@@ -162,6 +164,105 @@ func newJobsUnsaveCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func newJobsRecommendedCmd() *cobra.Command {
+	var start, count int
+	cmd := &cobra.Command{
+		Use:   "recommended",
+		Short: "List LinkedIn's recommended jobs for you",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			result, err := li.Jobs.GetRecommendedJobs(start, count)
+			if err != nil {
+				return err
+			}
+			if p.Format() == output.FormatJSON {
+				return p.JSON(result)
+			}
+			if len(result.Items) == 0 {
+				p.Warn("No recommended jobs found")
+				return nil
+			}
+			if p.Format() == output.FormatTable {
+				rows := make([][]string, 0, len(result.Items))
+				for _, j := range result.Items {
+					rows = append(rows, []string{j.Title, j.Company.Name, j.Location, j.ID})
+				}
+				p.Table([]string{"Title", "Company", "Location", "ID"}, rows)
+				return nil
+			}
+			p.Header(fmt.Sprintf("Recommended Jobs (%d)", result.Pagination.Total))
+			for _, j := range result.Items {
+				p.Printf("  %s at %s  —  %s  (ID: %s)\n", j.Title, j.Company.Name, j.Location, j.ID)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().IntVar(&start, "start", 0, "Pagination offset")
+	cmd.Flags().IntVar(&count, "count", 20, "Number of results")
+	return cmd
+}
+
+func newJobsCompanyCmd() *cobra.Command {
+	var start, count int
+	cmd := &cobra.Command{
+		Use:   "company <company-urn>",
+		Short: "Search jobs posted by a specific company",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			result, err := li.Jobs.SearchJobsByCompany(args[0], start, count)
+			if err != nil {
+				return err
+			}
+			if p.Format() == output.FormatJSON {
+				return p.JSON(result)
+			}
+			if len(result.Items) == 0 {
+				p.Warn("No jobs found for this company")
+				return nil
+			}
+			if p.Format() == output.FormatTable {
+				rows := make([][]string, 0, len(result.Items))
+				for _, j := range result.Items {
+					remote := ""
+					if j.Remote {
+						remote = "Remote"
+					}
+					rows = append(rows, []string{j.Title, j.Location, remote, j.ID})
+				}
+				p.Table([]string{"Title", "Location", "Remote", "ID"}, rows)
+				return nil
+			}
+			p.Header(fmt.Sprintf("Company Jobs (%d)", result.Pagination.Total))
+			for _, j := range result.Items {
+				loc := j.Location
+				if j.Remote {
+					loc += " (Remote)"
+				}
+				p.Printf("  %s  —  %s  (ID: %s)\n", j.Title, loc, j.ID)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().IntVar(&start, "start", 0, "Pagination offset")
+	cmd.Flags().IntVar(&count, "count", 20, "Number of results")
+	return cmd
 }
 
 func newJobsAppliedCmd() *cobra.Command {

@@ -26,13 +26,13 @@ type voyagerCompany struct {
 	Industry      struct {
 		LocalizedName string `json:"localizedName"`
 	} `json:"industry,omitempty"`
-	Website               string `json:"websiteUrl,omitempty"`
-	Headquarters          struct {
+	Website      string `json:"websiteUrl,omitempty"`
+	Headquarters struct {
 		City    string `json:"city,omitempty"`
 		Country string `json:"country,omitempty"`
 	} `json:"headquarter,omitempty"`
-	StaffCount            int    `json:"staffCount,omitempty"`
-	StaffCountRange       struct {
+	StaffCount      int `json:"staffCount,omitempty"`
+	StaffCountRange struct {
 		Start int `json:"start"`
 		End   int `json:"end"`
 	} `json:"staffCountRange,omitempty"`
@@ -49,9 +49,9 @@ type voyagerCompany struct {
 // GetCompany returns information about a company by universalName or ID.
 func (s *CompaniesService) GetCompany(companyID string) (*models.Company, error) {
 	params := map[string]string{
-		"q":              "universalName",
-		"universalName":  companyID,
-		"decorationId":   "com.linkedin.voyager.deco.organization.web.WebFullCompanyMain-12",
+		"q":             "universalName",
+		"universalName": companyID,
+		"decorationId":  "com.linkedin.voyager.deco.organization.web.WebFullCompanyMain-12",
 	}
 
 	var raw struct {
@@ -87,16 +87,16 @@ func (s *CompaniesService) GetCompanyPosts(companyURN string, start, count int) 
 		count = client.DefaultCount
 	}
 	params := map[string]string{
-		"q":           "company",
-		"companyUrn":  companyURN,
-		"start":       fmt.Sprintf("%d", start),
-		"count":       fmt.Sprintf("%d", count),
+		"q":          "company",
+		"companyUrn": companyURN,
+		"start":      fmt.Sprintf("%d", start),
+		"count":      fmt.Sprintf("%d", count),
 	}
 
 	var raw struct {
 		Elements []struct {
 			Value struct {
-				EntityURN string `json:"entityUrn"`
+				EntityURN  string `json:"entityUrn"`
 				Commentary struct {
 					Text struct {
 						Text string `json:"text"`
@@ -141,6 +141,65 @@ func (s *CompaniesService) GetCompanyPosts(companyURN string, start, count int) 
 			CommentCount: v.SocialDetail.CommentCount,
 			ShareCount:   v.SocialDetail.ShareCount,
 			PostedAt:     msToTime(v.CreatedAt),
+		})
+	}
+	return result, nil
+}
+
+// GetCompanyEmployees searches for employees of a company.
+func (s *CompaniesService) GetCompanyEmployees(companyID string, start, count int) (*models.PagedSearchPeople, error) {
+	if count == 0 {
+		count = client.DefaultCount
+	}
+	params := map[string]string{
+		"q":       "people",
+		"filters": fmt.Sprintf("List(currentCompany->%s)", companyID),
+		"start":   fmt.Sprintf("%d", start),
+		"count":   fmt.Sprintf("%d", count),
+	}
+
+	var raw struct {
+		Elements []struct {
+			HitInfo struct {
+				MiniProfile voyagerMiniProfile `json:"com.linkedin.voyager.search.SearchProfile"`
+			} `json:"hitInfo"`
+			Distance struct {
+				Value string `json:"value"`
+			} `json:"distance,omitempty"`
+		} `json:"elements"`
+		Paging struct {
+			Start int `json:"start"`
+			Count int `json:"count"`
+			Total int `json:"total"`
+		} `json:"paging,omitempty"`
+	}
+
+	if err := s.c.Get(client.EndpointSearch, params, &raw); err != nil {
+		return nil, fmt.Errorf("get company employees for %q: %w", companyID, err)
+	}
+
+	result := &models.PagedSearchPeople{
+		Pagination: models.Pagination{
+			Start:   start,
+			Count:   count,
+			Total:   raw.Paging.Total,
+			HasMore: (start + count) < raw.Paging.Total,
+		},
+	}
+	for _, el := range raw.Elements {
+		mp := el.HitInfo.MiniProfile
+		if mp.EntityURN == "" {
+			continue
+		}
+		result.Items = append(result.Items, models.SearchPeopleResult{
+			Profile: models.Profile{
+				URN:       mp.EntityURN,
+				ProfileID: mp.PublicID,
+				FirstName: mp.FirstName,
+				LastName:  mp.LastName,
+				Headline:  mp.Occupation,
+			},
+			Distance: el.Distance.Value,
 		})
 	}
 	return result, nil

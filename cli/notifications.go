@@ -16,6 +16,8 @@ func newNotificationsCmd() *cobra.Command {
 	cmd.AddCommand(
 		newNotificationsListCmd(),
 		newNotificationsMarkReadCmd(),
+		newNotificationsMarkAllReadCmd(),
+		newNotificationsCountCmd(),
 	)
 	return cmd
 }
@@ -96,6 +98,54 @@ func newNotificationsMarkReadCmd() *cobra.Command {
 				return err
 			}
 			p.Success("Notification marked as read")
+			return nil
+		},
+	}
+}
+
+func newNotificationsMarkAllReadCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "mark-all-read",
+		Short: "Mark all notifications as read",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			if err := li.Notifications.MarkAllRead(); err != nil {
+				return err
+			}
+			p.Success("All notifications marked as read")
+			return nil
+		},
+	}
+}
+
+func newNotificationsCountCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "count",
+		Short: "Get the number of unread notifications",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			badge, err := li.Notifications.GetBadgeCount()
+			if err != nil {
+				return err
+			}
+			if p.Format() == output.FormatJSON {
+				return p.JSON(badge)
+			}
+			p.Printf("Unread notifications: %d\n", badge.UnreadCount)
 			return nil
 		},
 	}

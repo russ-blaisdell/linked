@@ -22,8 +22,10 @@ func newConnectionsCmd() *cobra.Command {
 		newConnectionsAcceptCmd(),
 		newConnectionsIgnoreCmd(),
 		newConnectionsWithdrawCmd(),
+		newConnectionsRemoveCmd(),
 		newConnectionsFollowCmd(),
 		newConnectionsUnfollowCmd(),
+		newConnectionsMutualCmd(),
 	)
 	return cmd
 }
@@ -291,6 +293,75 @@ func newConnectionsWithdrawCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func newConnectionsRemoveCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "remove <profile-urn>",
+		Short: "Remove a 1st-degree connection",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			if err := li.Connections.RemoveConnection(args[0]); err != nil {
+				return err
+			}
+			p.Success("Connection removed")
+			return nil
+		},
+	}
+}
+
+func newConnectionsMutualCmd() *cobra.Command {
+	var start, count int
+	cmd := &cobra.Command{
+		Use:   "mutual <profile-urn>",
+		Short: "List mutual connections with a LinkedIn member",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p, err := newPrinter()
+			if err != nil {
+				return err
+			}
+			li, err := newLinkedIn()
+			if err != nil {
+				return err
+			}
+			result, err := li.Connections.GetMutualConnections(args[0], start, count)
+			if err != nil {
+				return err
+			}
+			if p.Format() == output.FormatJSON {
+				return p.JSON(result)
+			}
+			if len(result.Items) == 0 {
+				p.Warn("No mutual connections found")
+				return nil
+			}
+			if p.Format() == output.FormatTable {
+				rows := make([][]string, 0, len(result.Items))
+				for _, m := range result.Items {
+					rows = append(rows, []string{m.Profile.FirstName + " " + m.Profile.LastName, m.Profile.Headline, m.Profile.ProfileID})
+				}
+				p.Table([]string{"Name", "Headline", "Profile ID"}, rows)
+				return nil
+			}
+			p.Header(fmt.Sprintf("Mutual Connections (%d)", result.Pagination.Total))
+			for _, m := range result.Items {
+				p.Printf("  %s %s  —  %s\n    %s\n\n", m.Profile.FirstName, m.Profile.LastName, m.Profile.Headline, m.Profile.ProfileID)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().IntVar(&start, "start", 0, "Pagination offset")
+	cmd.Flags().IntVar(&count, "count", 20, "Number of results")
+	return cmd
 }
 
 func newConnectionsFollowCmd() *cobra.Command {

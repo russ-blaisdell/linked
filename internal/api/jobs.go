@@ -35,12 +35,12 @@ type voyagerJobPosting struct {
 	WorkplaceTypes    []struct {
 		TypeURN string `json:"workplaceTypeUrn"`
 	} `json:"workplaceTypes,omitempty"`
-	ListedAt        int64 `json:"listedAt"`
-	ExpireAt        int64 `json:"expireAt,omitempty"`
-	ApplyMethod     struct {
+	ListedAt    int64 `json:"listedAt"`
+	ExpireAt    int64 `json:"expireAt,omitempty"`
+	ApplyMethod struct {
 		ExternalURL string `json:"com.linkedin.voyager.jobs.OffsiteApply,omitempty"`
 	} `json:"applyMethod,omitempty"`
-	JobState        string `json:"jobState,omitempty"`
+	JobState         string `json:"jobState,omitempty"`
 	EmploymentStatus string `json:"formattedEmploymentStatus,omitempty"`
 	ExperienceLevel  string `json:"formattedExperienceLevel,omitempty"`
 }
@@ -201,10 +201,10 @@ func (s *JobsService) SearchJobsByCompany(companyURN string, start, count int) (
 		count = client.DefaultCount
 	}
 	params := map[string]string{
-		"q":          "jobSearch",
-		"filters":    fmt.Sprintf("List(company->%s)", urnToID(companyURN)),
-		"start":      fmt.Sprintf("%d", start),
-		"count":      fmt.Sprintf("%d", count),
+		"q":       "jobSearch",
+		"filters": fmt.Sprintf("List(company->%s)", urnToID(companyURN)),
+		"start":   fmt.Sprintf("%d", start),
+		"count":   fmt.Sprintf("%d", count),
 	}
 
 	var raw struct {

@@ -70,25 +70,25 @@ type Language struct {
 
 // Certification is a professional certification on a profile.
 type Certification struct {
-	ID           string `json:"id,omitempty"`
-	Name         string `json:"name"`
-	Authority    string `json:"authority,omitempty"`
-	LicenseNum   string `json:"licenseNumber,omitempty"`
-	URL          string `json:"url,omitempty"`
-	StartDate    string `json:"startDate,omitempty"`
-	EndDate      string `json:"endDate,omitempty"`
+	ID         string `json:"id,omitempty"`
+	Name       string `json:"name"`
+	Authority  string `json:"authority,omitempty"`
+	LicenseNum string `json:"licenseNumber,omitempty"`
+	URL        string `json:"url,omitempty"`
+	StartDate  string `json:"startDate,omitempty"`
+	EndDate    string `json:"endDate,omitempty"`
 }
 
 // VolunteerExperience is a volunteer position on a profile.
 type VolunteerExperience struct {
-	ID          string `json:"id,omitempty"`
-	Role        string `json:"role"`
+	ID           string `json:"id,omitempty"`
+	Role         string `json:"role"`
 	Organization string `json:"organization"`
-	Cause       string `json:"cause,omitempty"`
-	StartDate   string `json:"startDate,omitempty"`
-	EndDate     string `json:"endDate,omitempty"`
-	Current     bool   `json:"current"`
-	Description string `json:"description,omitempty"`
+	Cause        string `json:"cause,omitempty"`
+	StartDate    string `json:"startDate,omitempty"`
+	EndDate      string `json:"endDate,omitempty"`
+	Current      bool   `json:"current"`
+	Description  string `json:"description,omitempty"`
 }
 
 // Project is a project on a profile.
@@ -123,10 +123,10 @@ type Honor struct {
 
 // Course is a course on a profile.
 type Course struct {
-	ID          string `json:"id,omitempty"`
-	Name        string `json:"name"`
-	Number      string `json:"number,omitempty"`
-	Occupation  string `json:"occupation,omitempty"`
+	ID         string `json:"id,omitempty"`
+	Name       string `json:"name"`
+	Number     string `json:"number,omitempty"`
+	Occupation string `json:"occupation,omitempty"`
 }
 
 // OpenToWork holds the user's job-seeking preferences.
@@ -175,7 +175,7 @@ type Invitation struct {
 	ToProfile   Profile `json:"toProfile,omitempty"`
 	Message     string  `json:"message,omitempty"`
 	SentAt      string  `json:"sentAt"`
-	Status      string  `json:"status"` // PENDING, ACCEPTED, IGNORED
+	Status      string  `json:"status"`    // PENDING, ACCEPTED, IGNORED
 	Direction   string  `json:"direction"` // INBOUND, OUTBOUND
 }
 
@@ -237,15 +237,15 @@ type Company struct {
 
 // Post is a LinkedIn content post/share.
 type Post struct {
-	URN          string  `json:"urn"`
-	AuthorProfile Profile `json:"authorProfile"`
-	Body         string  `json:"body"`
-	LikeCount    int     `json:"likeCount"`
-	CommentCount int     `json:"commentCount"`
-	ShareCount   int     `json:"shareCount"`
-	PostedAt     string  `json:"postedAt"`
-	Liked        bool    `json:"liked"`
-	ImageURLs    []string `json:"imageUrls,omitempty"`
+	URN           string   `json:"urn"`
+	AuthorProfile Profile  `json:"authorProfile"`
+	Body          string   `json:"body"`
+	LikeCount     int      `json:"likeCount"`
+	CommentCount  int      `json:"commentCount"`
+	ShareCount    int      `json:"shareCount"`
+	PostedAt      string   `json:"postedAt"`
+	Liked         bool     `json:"liked"`
+	ImageURLs     []string `json:"imageUrls,omitempty"`
 }
 
 // Comment is a comment on a LinkedIn post.

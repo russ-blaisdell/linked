@@ -38,23 +38,23 @@ type voyagerMiniProfile struct {
 
 // voyagerFullProfile is the shape returned by the profile endpoint.
 type voyagerFullProfile struct {
-	MiniProfile        voyagerMiniProfile `json:"miniProfile"`
-	Summary            string             `json:"summary,omitempty"`
-	Industry           struct {
+	MiniProfile voyagerMiniProfile `json:"miniProfile"`
+	Summary     string             `json:"summary,omitempty"`
+	Industry    struct {
 		LocalizedName string `json:"localizedName"`
 	} `json:"industry,omitempty"`
 	ProfileTopPosition []struct {
-		Title           string           `json:"title"`
-		CompanyName     string           `json:"companyName,omitempty"`
-		GeoLocationName string           `json:"geoLocationName,omitempty"`
-		Description     string           `json:"description,omitempty"`
+		Title           string            `json:"title"`
+		CompanyName     string            `json:"companyName,omitempty"`
+		GeoLocationName string            `json:"geoLocationName,omitempty"`
+		Description     string            `json:"description,omitempty"`
 		DateRange       *voyagerDateRange `json:"dateRange,omitempty"`
 	} `json:"profileTopPosition,omitempty"`
 	Education []struct {
-		SchoolName   string           `json:"schoolName,omitempty"`
-		DegreeName   string           `json:"degreeName,omitempty"`
-		FieldOfStudy string           `json:"fieldOfStudy,omitempty"`
-		Description  string           `json:"description,omitempty"`
+		SchoolName   string            `json:"schoolName,omitempty"`
+		DegreeName   string            `json:"degreeName,omitempty"`
+		FieldOfStudy string            `json:"fieldOfStudy,omitempty"`
+		Description  string            `json:"description,omitempty"`
 		DateRange    *voyagerDateRange `json:"dateRange,omitempty"`
 	} `json:"education,omitempty"`
 	Skills []struct {
@@ -68,8 +68,12 @@ type voyagerFullProfile struct {
 }
 
 type voyagerDateRange struct {
-	Start *struct{ Year int `json:"year"` } `json:"start,omitempty"`
-	End   *struct{ Year int `json:"year"` } `json:"end,omitempty"`
+	Start *struct {
+		Year int `json:"year"`
+	} `json:"start,omitempty"`
+	End *struct {
+		Year int `json:"year"`
+	} `json:"end,omitempty"`
 }
 
 // voyagerNormalizedEnvelope is the standard Voyager response wrapper.
@@ -106,8 +110,8 @@ func (s *ProfileService) GetProfile(profileID string) (*models.Profile, error) {
 func (s *ProfileService) GetContactInfo(profileID string) (*models.ContactInfo, error) {
 	path := fmt.Sprintf(client.EndpointProfileContact, profileID)
 	var raw struct {
-		EmailAddress   *string `json:"emailAddress"`
-		PhoneNumbers   []struct {
+		EmailAddress *string `json:"emailAddress"`
+		PhoneNumbers []struct {
 			Number string `json:"number"`
 		} `json:"phoneNumbers"`
 		TwitterHandles []struct {
@@ -625,9 +629,9 @@ func (s *ProfileService) GetWhoViewed(start, count int) (*models.PagedProfileVie
 
 	var raw struct {
 		Elements []struct {
-			EntityURN  string             `json:"entityUrn"`
-			ViewedAt   int64              `json:"viewedAt,omitempty"`
-			ViewCount  int                `json:"viewCount,omitempty"`
+			EntityURN   string             `json:"entityUrn"`
+			ViewedAt    int64              `json:"viewedAt,omitempty"`
+			ViewCount   int                `json:"viewCount,omitempty"`
 			MiniProfile voyagerMiniProfile `json:"miniProfile,omitempty"`
 		} `json:"elements"`
 		Paging struct {
@@ -692,7 +696,7 @@ func (s *ProfileService) UploadProfilePhoto(profileID, filePath string) error {
 	// Step 1: register upload
 	registerPayload := map[string]interface{}{
 		"registerUploadRequest": map[string]interface{}{
-			"owner": fmt.Sprintf("urn:li:person:%s", profileID),
+			"owner":   fmt.Sprintf("urn:li:person:%s", profileID),
 			"recipes": []string{"urn:li:digitalmediaRecipe:profile-photo"},
 			"serviceRelationships": []map[string]interface{}{
 				{

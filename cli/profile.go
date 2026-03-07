@@ -477,8 +477,8 @@ func newProfileEducationAddCmd() *cobra.Command {
 	var school, schoolURN, degree, field, description string
 	var startYear, endYear int
 	cmd := &cobra.Command{
-		Use:   "add",
-		Short: "Add an education entry",
+		Use:     "add",
+		Short:   "Add an education entry",
 		Example: `  linked profile education add --school "MIT" --degree "BS" --field "Computer Science" --start-year 2018 --end-year 2022`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
@@ -602,8 +602,8 @@ func newProfileCertificationsAddCmd() *cobra.Command {
 	var name, authority, licenseNum, url string
 	var startYear, startMonth, endYear, endMonth int
 	cmd := &cobra.Command{
-		Use:   "add",
-		Short: "Add a certification",
+		Use:     "add",
+		Short:   "Add a certification",
 		Example: `  linked profile certifications add --name "AWS Solutions Architect" --authority "Amazon" --start-year 2023`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
@@ -644,9 +644,9 @@ func newProfileCertificationsUpdateCmd() *cobra.Command {
 	var name, authority, licenseNum, url string
 	var startYear, startMonth, endYear, endMonth int
 	cmd := &cobra.Command{
-		Use:  "update <cert-id>",
+		Use:   "update <cert-id>",
 		Short: "Update a certification",
-		Args: cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
 			if err != nil {
@@ -683,9 +683,9 @@ func newProfileCertificationsUpdateCmd() *cobra.Command {
 
 func newProfileCertificationsRemoveCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:  "remove <cert-id>",
+		Use:   "remove <cert-id>",
 		Short: "Remove a certification",
-		Args: cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
 			if err != nil {
@@ -725,8 +725,8 @@ func newProfileLanguagesCmd() *cobra.Command {
 func newProfileLanguagesAddCmd() *cobra.Command {
 	var name, proficiency string
 	cmd := &cobra.Command{
-		Use:   "add",
-		Short: "Add a language",
+		Use:     "add",
+		Short:   "Add a language",
 		Example: `  linked profile languages add --name "Spanish" --proficiency PROFESSIONAL_WORKING`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
@@ -756,9 +756,9 @@ func newProfileLanguagesAddCmd() *cobra.Command {
 
 func newProfileLanguagesRemoveCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:  "remove <language-id>",
+		Use:   "remove <language-id>",
 		Short: "Remove a language",
-		Args: cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
 			if err != nil {
@@ -826,8 +826,8 @@ func newProfileVolunteerAddCmd() *cobra.Command {
 	var startYear, startMonth, endYear, endMonth int
 	var current bool
 	cmd := &cobra.Command{
-		Use:   "add",
-		Short: "Add a volunteer experience",
+		Use:     "add",
+		Short:   "Add a volunteer experience",
 		Example: `  linked profile volunteer add --role "Mentor" --org "Code.org" --cause "Education" --start-year 2022 --current`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
@@ -912,9 +912,9 @@ func newProfileVolunteerUpdateCmd() *cobra.Command {
 
 func newProfileVolunteerRemoveCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:  "remove <volunteer-id>",
+		Use:   "remove <volunteer-id>",
 		Short: "Remove a volunteer experience",
-		Args: cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
 			if err != nil {
@@ -957,8 +957,8 @@ func newProfileProjectsAddCmd() *cobra.Command {
 	var startYear, startMonth, endYear, endMonth int
 	var current bool
 	cmd := &cobra.Command{
-		Use:   "add",
-		Short: "Add a project",
+		Use:     "add",
+		Short:   "Add a project",
 		Example: `  linked profile projects add --title "My App" --description "A mobile app" --url "https://myapp.com" --start-year 2023 --current`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
@@ -1001,9 +1001,9 @@ func newProfileProjectsUpdateCmd() *cobra.Command {
 	var startYear, startMonth, endYear, endMonth int
 	var current bool
 	cmd := &cobra.Command{
-		Use:  "update <project-id>",
+		Use:   "update <project-id>",
 		Short: "Update a project",
-		Args: cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
 			if err != nil {
@@ -1041,9 +1041,9 @@ func newProfileProjectsUpdateCmd() *cobra.Command {
 
 func newProfileProjectsRemoveCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:  "remove <project-id>",
+		Use:   "remove <project-id>",
 		Short: "Remove a project",
-		Args: cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
 			if err != nil {
@@ -1085,8 +1085,8 @@ func newProfilePublicationsAddCmd() *cobra.Command {
 	var name, publisher, url, description string
 	var year, month int
 	cmd := &cobra.Command{
-		Use:   "add",
-		Short: "Add a publication",
+		Use:     "add",
+		Short:   "Add a publication",
 		Example: `  linked profile publications add --name "My Paper" --publisher "ACM" --year 2023 --url "https://doi.org/..."`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
@@ -1125,9 +1125,9 @@ func newProfilePublicationsUpdateCmd() *cobra.Command {
 	var name, publisher, url, description string
 	var year, month int
 	cmd := &cobra.Command{
-		Use:  "update <publication-id>",
+		Use:   "update <publication-id>",
 		Short: "Update a publication",
-		Args: cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
 			if err != nil {
@@ -1162,9 +1162,9 @@ func newProfilePublicationsUpdateCmd() *cobra.Command {
 
 func newProfilePublicationsRemoveCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:  "remove <publication-id>",
+		Use:   "remove <publication-id>",
 		Short: "Remove a publication",
-		Args: cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
 			if err != nil {
@@ -1205,8 +1205,8 @@ func newProfileHonorsAddCmd() *cobra.Command {
 	var title, issuer, description string
 	var year, month int
 	cmd := &cobra.Command{
-		Use:   "add",
-		Short: "Add an honor or award",
+		Use:     "add",
+		Short:   "Add an honor or award",
 		Example: `  linked profile honors add --title "Dean's List" --issuer "MIT" --year 2022`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
@@ -1242,9 +1242,9 @@ func newProfileHonorsAddCmd() *cobra.Command {
 
 func newProfileHonorsRemoveCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:  "remove <honor-id>",
+		Use:   "remove <honor-id>",
 		Short: "Remove an honor or award",
-		Args: cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
 			if err != nil {
@@ -1284,8 +1284,8 @@ func newProfileCoursesCmd() *cobra.Command {
 func newProfileCoursesAddCmd() *cobra.Command {
 	var name, number, occupation string
 	cmd := &cobra.Command{
-		Use:   "add",
-		Short: "Add a course",
+		Use:     "add",
+		Short:   "Add a course",
 		Example: `  linked profile courses add --name "Machine Learning" --number "CS229" --occupation "Student"`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
@@ -1318,9 +1318,9 @@ func newProfileCoursesAddCmd() *cobra.Command {
 
 func newProfileCoursesRemoveCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:  "remove <course-id>",
+		Use:   "remove <course-id>",
 		Short: "Remove a course",
-		Args: cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
 			if err != nil {
@@ -1349,8 +1349,8 @@ func newProfileOpenToWorkCmd() *cobra.Command {
 	var title string
 	var jobTypes, locations []string
 	cmd := &cobra.Command{
-		Use:   "open-to-work",
-		Short: "Set your Open to Work status",
+		Use:     "open-to-work",
+		Short:   "Set your Open to Work status",
 		Example: `  linked profile open-to-work --job-types FULL_TIME,CONTRACT --locations "Remote" --title "Software Engineer"`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
@@ -1472,8 +1472,8 @@ func newProfileWhoViewedCmd() *cobra.Command {
 func newProfilePhotoCmd() *cobra.Command {
 	var filePath string
 	cmd := &cobra.Command{
-		Use:   "photo",
-		Short: "Upload a new profile photo",
+		Use:     "photo",
+		Short:   "Upload a new profile photo",
 		Example: `  linked profile photo --file ~/Pictures/headshot.jpg`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if filePath == "" {

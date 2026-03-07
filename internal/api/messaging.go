@@ -26,9 +26,9 @@ type voyagerMessageEvent struct {
 }
 
 type voyagerConversationEvent struct {
-	EntityURN   string `json:"entityUrn"`
-	CreatedAt   int64  `json:"createdAt"`
-	DeliveredAt int64  `json:"deliveredAt,omitempty"`
+	EntityURN    string `json:"entityUrn"`
+	CreatedAt    int64  `json:"createdAt"`
+	DeliveredAt  int64  `json:"deliveredAt,omitempty"`
 	EventContent struct {
 		MessageEvent voyagerMessageEvent `json:"com.linkedin.voyager.messaging.event.MessageEvent"`
 	} `json:"eventContent"`

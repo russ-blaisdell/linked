@@ -57,9 +57,9 @@ func (s *SearchService) SearchPeople(input models.SearchPeopleInput) (*models.Pa
 
 	result := &models.PagedSearchPeople{
 		Pagination: models.Pagination{
-			Start: input.Start,
-			Count: input.Count,
-			Total: raw.Paging.Total,
+			Start:   input.Start,
+			Count:   input.Count,
+			Total:   raw.Paging.Total,
 			HasMore: (input.Start + input.Count) < raw.Paging.Total,
 		},
 	}
@@ -114,7 +114,7 @@ func (s *SearchService) SearchJobs(input models.SearchJobsInput) (*models.PagedJ
 					EntityURN string `json:"entityUrn"`
 					Title     string `json:"title"`
 					Company   struct {
-						Name       string `json:"name"`
+						Name          string `json:"name"`
 						UniversalName string `json:"universalName"`
 					} `json:"company"`
 					FormattedLocation string `json:"formattedLocation"`
@@ -197,7 +197,7 @@ func (s *SearchService) SearchCompanies(keywords string, start, count int) (*mod
 	}
 
 	result := &models.PagedCompanies{
-		Pagination: models.Pagination{Start: start, Count: count, Total: raw.Paging.Total, HasMore: (start+count) < raw.Paging.Total},
+		Pagination: models.Pagination{Start: start, Count: count, Total: raw.Paging.Total, HasMore: (start + count) < raw.Paging.Total},
 	}
 	for _, el := range raw.Elements {
 		co := el.HitInfo.Company
@@ -237,8 +237,8 @@ func (s *SearchService) SearchPosts(keywords string, start, count int) (*models.
 						UpdateText struct {
 							Text string `json:"text"`
 						} `json:"updateText,omitempty"`
-						TotalLikes    int   `json:"totalLikes,omitempty"`
-						CreatedAt     int64 `json:"createdAt,omitempty"`
+						TotalLikes int   `json:"totalLikes,omitempty"`
+						CreatedAt  int64 `json:"createdAt,omitempty"`
 					} `json:"com.linkedin.voyager.search.SearchActivity,omitempty"`
 				} `json:"item"`
 			} `json:"items,omitempty"`

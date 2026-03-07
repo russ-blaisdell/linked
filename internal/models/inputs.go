@@ -39,14 +39,14 @@ type SkillInput struct {
 
 // CertificationInput holds parameters for adding or updating a certification.
 type CertificationInput struct {
-	Name        string
-	Authority   string
-	LicenseNum  string
-	URL         string
-	StartYear   int
-	StartMonth  int
-	EndYear     int
-	EndMonth    int
+	Name       string
+	Authority  string
+	LicenseNum string
+	URL        string
+	StartYear  int
+	StartMonth int
+	EndYear    int
+	EndMonth   int
 }
 
 // LanguageInput holds parameters for adding a language.
@@ -101,9 +101,9 @@ type HonorInput struct {
 
 // CourseInput holds parameters for adding a course.
 type CourseInput struct {
-	Name        string
-	Number      string
-	Occupation  string
+	Name       string
+	Number     string
+	Occupation string
 }
 
 // OpenToWorkInput holds parameters for setting Open to Work status.
@@ -135,10 +135,10 @@ type CreatePostInput struct {
 
 // CreatePostWithImageInput holds parameters for creating a post with an image.
 type CreatePostWithImageInput struct {
-	Body        string
-	ImagePath   string
+	Body         string
+	ImagePath    string
 	ImageAltText string
-	Visibility  string
+	Visibility   string
 }
 
 // EditPostInput holds parameters for editing an existing post.

@@ -36,7 +36,9 @@ func (s *PostsService) GetFeed(start, count int) (*models.PagedPosts, error) {
 			Value struct {
 				EntityURN  string `json:"entityUrn"`
 				Commentary struct {
-					Text struct{ Text string `json:"text"` } `json:"text"`
+					Text struct {
+						Text string `json:"text"`
+					} `json:"text"`
 				} `json:"commentary,omitempty"`
 				SocialDetail struct {
 					LikeCount    int `json:"likeCount"`
@@ -45,8 +47,10 @@ func (s *PostsService) GetFeed(start, count int) (*models.PagedPosts, error) {
 				} `json:"socialDetail,omitempty"`
 				CreatedAt int64 `json:"createdAt"`
 				Actor     struct {
-					Urn  string                     `json:"urn"`
-					Name struct{ Text string `json:"text"` } `json:"name,omitempty"`
+					Urn  string `json:"urn"`
+					Name struct {
+						Text string `json:"text"`
+					} `json:"name,omitempty"`
 				} `json:"actor,omitempty"`
 			} `json:"com.linkedin.voyager.feed.render.UpdateV2"`
 		} `json:"elements"`
@@ -103,7 +107,9 @@ func (s *PostsService) GetMemberPosts(memberURN string, start, count int) (*mode
 			Value struct {
 				EntityURN  string `json:"entityUrn"`
 				Commentary struct {
-					Text struct{ Text string `json:"text"` } `json:"text"`
+					Text struct {
+						Text string `json:"text"`
+					} `json:"text"`
 				} `json:"commentary,omitempty"`
 				SocialDetail struct {
 					LikeCount    int `json:"likeCount"`
@@ -250,7 +256,7 @@ func (s *PostsService) CreatePostWithImage(authorURN string, input models.Create
 	// Step 1: register upload
 	registerPayload := map[string]interface{}{
 		"registerUploadRequest": map[string]interface{}{
-			"owner": authorURN,
+			"owner":   authorURN,
 			"recipes": []string{"urn:li:digitalmediaRecipe:feedshare-image"},
 			"serviceRelationships": []map[string]interface{}{
 				{

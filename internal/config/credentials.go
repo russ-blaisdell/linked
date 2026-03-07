@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	defaultProfile  = "default"
-	credsDirBase    = ".openclaw/credentials/linkedin"
-	credsFilename   = "creds.json"
+	defaultProfile = "default"
+	credsDirBase   = ".openclaw/credentials/linkedin"
+	credsFilename  = "creds.json"
 )
 
 // CredentialsPath returns the path to the credentials file for the given profile.

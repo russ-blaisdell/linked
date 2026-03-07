@@ -170,10 +170,10 @@ func newPostsUnlikeCmd() *cobra.Command {
 
 func newPostsCommentCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "comment <post-urn> <text>",
-		Short: "Comment on a post",
+		Use:     "comment <post-urn> <text>",
+		Short:   "Comment on a post",
 		Example: `  linked posts comment urn:li:activity:12345 "Great insights!"`,
-		Args: cobra.ExactArgs(2),
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
 			if err != nil {

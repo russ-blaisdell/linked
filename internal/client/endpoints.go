@@ -46,12 +46,12 @@ const (
 	EndpointWVMPCards = VoyagerAPI + "/identity/wvmpCards"
 
 	// Connections & Relationships
-	EndpointConnections      = VoyagerAPI + "/relationships/connections"
-	EndpointConnection       = VoyagerAPI + "/relationships/connections/%s"
-	EndpointInvitations      = VoyagerAPI + "/relationships/invitationViews"
-	EndpointSentInvitations  = VoyagerAPI + "/relationships/sentInvitationViewsV2"
-	EndpointInvitationHandle = VoyagerAPI + "/relationships/invitations/%s"
-	EndpointFollowEntity     = VoyagerAPI + "/feed/follows"
+	EndpointConnections       = VoyagerAPI + "/relationships/connections"
+	EndpointConnection        = VoyagerAPI + "/relationships/connections/%s"
+	EndpointInvitations       = VoyagerAPI + "/relationships/invitationViews"
+	EndpointSentInvitations   = VoyagerAPI + "/relationships/sentInvitationViewsV2"
+	EndpointInvitationHandle  = VoyagerAPI + "/relationships/invitations/%s"
+	EndpointFollowEntity      = VoyagerAPI + "/feed/follows"
 	EndpointMutualConnections = VoyagerAPI + "/relationships/connectionOf"
 
 	// Messaging
@@ -74,16 +74,16 @@ const (
 	EndpointCompanyUpdates = VoyagerAPI + "/feed/updates"
 
 	// Posts / Feed
-	EndpointFeed         = VoyagerAPI + "/feed/updatesV2"
-	EndpointPostCreate   = VoyagerAPI + "/ugcPosts"
-	EndpointUGCPost      = VoyagerAPI + "/ugcPosts/%s"
+	EndpointFeed          = VoyagerAPI + "/feed/updatesV2"
+	EndpointPostCreate    = VoyagerAPI + "/ugcPosts"
+	EndpointUGCPost       = VoyagerAPI + "/ugcPosts/%s"
 	EndpointSocialActions = VoyagerAPI + "/socialActions/%s"
-	EndpointLike         = VoyagerAPI + "/socialActions/%s/likes"
-	EndpointComments     = VoyagerAPI + "/socialActions/%s/comments"
-	EndpointCommentByID  = VoyagerAPI + "/socialActions/%s/comments/%s"
-	EndpointCommentLike  = VoyagerAPI + "/socialActions/%s/comments/%s/likes"
-	EndpointShares       = VoyagerAPI + "/shares"
-	EndpointMediaUpload  = VoyagerAPI + "/assets"
+	EndpointLike          = VoyagerAPI + "/socialActions/%s/likes"
+	EndpointComments      = VoyagerAPI + "/socialActions/%s/comments"
+	EndpointCommentByID   = VoyagerAPI + "/socialActions/%s/comments/%s"
+	EndpointCommentLike   = VoyagerAPI + "/socialActions/%s/comments/%s/likes"
+	EndpointShares        = VoyagerAPI + "/shares"
+	EndpointMediaUpload   = VoyagerAPI + "/assets"
 
 	// Search
 	EndpointSearch        = VoyagerAPI + "/search/hits"
@@ -91,12 +91,12 @@ const (
 	EndpointJobSearchDash = VoyagerAPI + "/jobs/search"
 
 	// Recommendations
-	EndpointRecommendations      = VoyagerAPI + "/identity/recommendations"
-	EndpointRecommendationGiven  = VoyagerAPI + "/identity/recommendations?q=given"
-	EndpointRecommendationByID   = VoyagerAPI + "/identity/recommendations/%s"
+	EndpointRecommendations     = VoyagerAPI + "/identity/recommendations"
+	EndpointRecommendationGiven = VoyagerAPI + "/identity/recommendations?q=given"
+	EndpointRecommendationByID  = VoyagerAPI + "/identity/recommendations/%s"
 
 	// Notifications
-	EndpointNotifications    = VoyagerAPI + "/feed/notifications"
+	EndpointNotifications     = VoyagerAPI + "/feed/notifications"
 	EndpointNotificationBadge = VoyagerAPI + "/feed/notificationBadge"
 )
 

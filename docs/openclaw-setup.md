@@ -42,6 +42,22 @@ Send a message to your OpenClaw agent (via Slack or any connected channel):
 @openclaw look up the Anthropic company on LinkedIn
 ```
 
+```
+@openclaw who viewed my LinkedIn profile this week?
+```
+
+```
+@openclaw what are my LinkedIn job recommendations?
+```
+
+```
+@openclaw update my LinkedIn headline to "Staff Engineer at Acme"
+```
+
+```
+@openclaw how many unread LinkedIn notifications do I have?
+```
+
 ## How it works
 
 When you ask OpenClaw about LinkedIn, the agent reads the skill definition at `~/.openclaw/workspace/skills/linkedin/skill.md` to understand what commands are available and when to use them. It then calls `linked` as a subprocess, capturing JSON output to build its response.

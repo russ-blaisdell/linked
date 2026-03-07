@@ -1,6 +1,9 @@
 # linked
 
 [![CI](https://github.com/russ-blaisdell/linked/actions/workflows/ci.yml/badge.svg)](https://github.com/russ-blaisdell/linked/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/russ-blaisdell/linked)](https://goreportcard.com/report/github.com/russ-blaisdell/linked)
+[![Go Version](https://img.shields.io/badge/go-1.24+-blue)](https://go.dev/doc/go1.24)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 > A full-featured LinkedIn CLI written in Go — and an AI-powered agent skill for [OpenClaw](https://www.getopenclaw.ai/).
 

@@ -1,5 +1,7 @@
 # linked
 
+[![CI](https://github.com/russ-blaisdell/linked/actions/workflows/ci.yml/badge.svg)](https://github.com/russ-blaisdell/linked/actions/workflows/ci.yml)
+
 > A full-featured LinkedIn CLI written in Go — and an AI-powered agent skill for [OpenClaw](https://www.getopenclaw.ai/).
 
 `linked` gives you complete programmatic control over LinkedIn from the terminal: manage your profile, messages, connections, jobs, posts, and more. Because it uses LinkedIn's internal Voyager API (cookie-based auth), **no developer account or API key is required** — just your existing LinkedIn session.
@@ -33,6 +35,7 @@ When paired with OpenClaw, `linked` becomes an intelligent agent skill that can 
 - [OpenClaw Integration](#openclaw-integration)
 - [Architecture](#architecture)
 - [Development](#development)
+- [Testing](#testing)
 - [Important Notes](#important-notes)
 
 ---
@@ -566,15 +569,6 @@ make skill      # install skill to ~/.openclaw/workspace/skills/linkedin/
 make clean      # remove dist/
 ```
 
-Tests run entirely against an in-process mock server — no network access, no credentials required:
-
-```bash
-make test
-# ok   github.com/russ-blaisdell/linked/tests/integration
-```
-
-The mock server validates the CSRF token on every request, serves JSON fixtures, and tracks stateful operations (messages sent, posts created, jobs saved, likes, follows) so tests can assert on side effects.
-
 ### Adding a feature
 
 1. Add the API method(s) to `internal/api/`
@@ -585,6 +579,58 @@ The mock server validates the CSRF token on every request, serves JSON fixtures,
 6. Update [`skill/linkedin/skill.md`](skill/linkedin/skill.md) with the new command
 
 > See **[CLAUDE.md](CLAUDE.md)** for detailed architecture notes, design decisions, and the complete file-by-file breakdown.
+
+---
+
+## Testing
+
+[![CI](https://github.com/russ-blaisdell/linked/actions/workflows/ci.yml/badge.svg)](https://github.com/russ-blaisdell/linked/actions/workflows/ci.yml)
+
+All tests run entirely against an in-process mock Voyager server — no network access and no real LinkedIn credentials required.
+
+```bash
+make test        # run integration tests (verbose)
+make test-short  # run tests without verbose output
+```
+
+Expected output:
+
+```
+ok   github.com/russ-blaisdell/linked/tests/integration
+```
+
+### How the mock server works
+
+`mock.New()` starts an `httptest.Server` that replicates the Voyager API surface:
+
+- **CSRF validation** — every request must include a matching `csrf-token` header; requests without it fail with `403`, exactly as LinkedIn does
+- **JSON fixtures** — responses are served from `mock/fixtures/`, so tests assert against realistic data shapes
+- **Stateful mutations** — the server tracks side effects in memory: messages sent, posts created, jobs saved, likes applied, follows, and more; tests can assert that operations actually changed server state
+
+### Test coverage
+
+Integration tests cover all 10 command domains:
+
+| File | Domain |
+|------|--------|
+| `auth_test.go` | Credential loading and `whoami` |
+| `profile_test.go` | Get/update profile; experience, education, skills, certifications, languages, volunteer, projects, publications, honors, courses; open-to-work; who viewed; photo upload |
+| `search_test.go` | People, jobs, companies, posts |
+| `messaging_test.go` | List, read, send, star, archive, mark-read, delete |
+| `connections_test.go` | List, pending/sent invitations, request, accept, ignore, withdraw, remove, follow, unfollow, mutual |
+| `jobs_test.go` | Get, save, unsave, saved, applied, recommended, company jobs |
+| `companies_test.go` | Get, follow, unfollow, posts, employees |
+| `posts_test.go` | Feed, create, create-with-image, edit, delete, like, unlike, comment, share, comments, delete-comment, like-comment, activity |
+| `recommendations_test.go` | Received, given, request, hide, show, decline, delete |
+| `notifications_test.go` | List, mark-read, mark-all-read, count |
+
+### CI
+
+The [CI workflow](.github/workflows/ci.yml) runs on every push and pull request to `main`:
+
+1. `go vet ./...` — static analysis
+2. `go test ./tests/integration/... -v -count=1` — full integration suite
+3. Cross-platform build check: `darwin/arm64`, `darwin/amd64`, `linux/amd64`
 
 ---
 

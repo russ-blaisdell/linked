@@ -646,7 +646,8 @@ The [CI workflow](.github/workflows/ci.yml) runs on every push and pull request 
 - **Terms of Service** — This tool uses LinkedIn's internal Voyager API, the same API the LinkedIn website uses. It is not an officially supported developer integration. Use it for personal automation only.
 - **Rate limits** — LinkedIn rate-limits API requests. Avoid bulk or automated operations that could trigger throttling.
 - **Cookie security** — Your `li_at` cookie grants full access to your LinkedIn account. Never share it or commit it to version control. Credential files are stored with `0600` permissions.
-- **Known broken commands** — LinkedIn periodically deprecates Voyager API endpoints. The following commands are currently broken and need updated endpoints: `search people`, `search jobs`, `search companies`, `search posts` (all return 404 — LinkedIn moved search to graphql), `profile contact` (returns 410 — endpoint removed), `profile who-viewed` (returns 400 — needs investigation). See [CLAUDE.md](CLAUDE.md) for details.
+- **Known broken commands** — LinkedIn periodically deprecates Voyager API endpoints. The following commands are currently broken and need updated endpoints: `search people`, `search jobs`, `search companies`, `search posts` (all return 404 — LinkedIn moved search to graphql), `profile contact` (returns 410 — endpoint removed). See [CLAUDE.md](CLAUDE.md) for details.
+- **`profile who-viewed`** — Returns the 90-day viewer count for all accounts. Individual viewer names require LinkedIn Premium and will be empty otherwise.
 
 ---
 

@@ -1,0 +1,35 @@
+{
+  "data": {
+    "premiumDashAnalyticsObjectByAnalyticsEntity": {
+      "paging": { "total": 2 },
+      "elements": [
+        {
+          "entityUrn": "urn:li:wvmpCard:1",
+          "viewedAt": 1741382400000,
+          "actor": {
+            "miniProfile": {
+              "entityUrn": "urn:li:member:111111111",
+              "publicIdentifier": "alice-smith",
+              "firstName": "Alice",
+              "lastName": "Smith",
+              "occupation": "Engineering Manager at Acme"
+            }
+          }
+        },
+        {
+          "entityUrn": "urn:li:wvmpCard:2",
+          "viewedAt": 1741296000000,
+          "actor": {
+            "miniProfile": {
+              "entityUrn": "urn:li:member:222222222",
+              "publicIdentifier": "bob-jones",
+              "firstName": "Bob",
+              "lastName": "Jones",
+              "occupation": "Senior Engineer at BigCo"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

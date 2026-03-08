@@ -142,6 +142,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Search
 	mux.HandleFunc("/voyager/api/search/hits", s.handleSearchHits)
 	mux.HandleFunc("/voyager/api/search/blended", s.handleSearchBlended)
+
+	// GraphQL (used by newer endpoints)
+	mux.HandleFunc("/voyager/api/graphql", s.handleGraphQL)
 }
 
 // ---- JSON helpers ----
@@ -560,4 +563,17 @@ func (s *Server) handleNotifications(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleNotificationByID(w http.ResponseWriter, r *http.Request) {
 	// PUT /voyager/api/feed/notifications/<id> — mark read
 	w.WriteHeader(http.StatusCreated)
+}
+
+// handleGraphQL routes GraphQL requests by queryId parameter.
+func (s *Server) handleGraphQL(w http.ResponseWriter, r *http.Request) {
+	queryID := r.URL.Query().Get("queryId")
+	switch {
+	case strings.HasPrefix(queryID, "voyagerFeedDashIdentityModule."):
+		writeFixture(w, "who-viewed-count.json")
+	case strings.HasPrefix(queryID, "voyagerPremiumDashAnalyticsObject."):
+		writeFixture(w, "who-viewed.json")
+	default:
+		http.Error(w, `{"status":404,"message":"Unknown queryId"}`, http.StatusNotFound)
+	}
 }

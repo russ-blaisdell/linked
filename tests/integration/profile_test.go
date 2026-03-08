@@ -142,3 +142,39 @@ func TestProfileEducation(t *testing.T) {
 		t.Errorf("Degree = %q, want %q", edu.Degree, "B.S.")
 	}
 }
+
+func TestGetWhoViewed(t *testing.T) {
+	s := startServer(t)
+	li := newTestLinkedIn(t, s)
+
+	result, err := li.Profile.GetWhoViewed(0, 10)
+	if err != nil {
+		t.Fatalf("GetWhoViewed() error: %v", err)
+	}
+
+	// Viewer count comes from the analytics view endpoint (42 in fixture).
+	if result.Pagination.Total != 42 {
+		t.Errorf("Total = %d, want 42", result.Pagination.Total)
+	}
+
+	// Individual viewers come from the analytics object endpoint (2 in fixture).
+	if len(result.Items) != 2 {
+		t.Fatalf("Items count = %d, want 2", len(result.Items))
+	}
+
+	first := result.Items[0]
+	if first.Profile.ProfileID != "alice-smith" {
+		t.Errorf("first viewer ProfileID = %q, want %q", first.Profile.ProfileID, "alice-smith")
+	}
+	if first.Profile.FirstName != "Alice" {
+		t.Errorf("first viewer FirstName = %q, want %q", first.Profile.FirstName, "Alice")
+	}
+	if first.ViewedAt == "" {
+		t.Error("first viewer ViewedAt should not be empty")
+	}
+
+	second := result.Items[1]
+	if second.Profile.ProfileID != "bob-jones" {
+		t.Errorf("second viewer ProfileID = %q, want %q", second.Profile.ProfileID, "bob-jones")
+	}
+}

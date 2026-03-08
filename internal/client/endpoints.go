@@ -42,8 +42,15 @@ const (
 	EndpointJobSeekingProfiles = VoyagerAPI + "/identity/jobSeekingProfiles"
 	EndpointJobSeekingProfile  = VoyagerAPI + "/identity/jobSeekingProfiles/%s"
 
+	// GraphQL (used by newer endpoints)
+	EndpointGraphQL = VoyagerAPI + "/graphql"
+
 	// Who Viewed Profile
-	EndpointWVMPCards = VoyagerAPI + "/identity/wvmpCards"
+	// The total viewer count comes from the feed identity module widget (free accounts).
+	// queryId for voyagerFeedDashIdentityModule — look for widgetType "WHO_VIEWED_MY_PROFILE".
+	EndpointFeedIdentityModuleQueryID = "voyagerFeedDashIdentityModule.803fe19f843a4d461478049f70d7babd"
+	// Individual viewer names require LinkedIn Premium (voyagerPremiumDashAnalyticsObject).
+	EndpointWVMPCards = VoyagerAPI + "/identity/wvmpCards" // deprecated — kept for mock compatibility
 
 	// Connections & Relationships
 	EndpointConnections       = VoyagerAPI + "/relationships/connections"

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/russ-blaisdell/linked/internal/client"
@@ -617,45 +618,105 @@ func (s *ProfileService) ClearOpenToWork(profileID string) error {
 
 // --- Who Viewed Profile ---
 
-// GetWhoViewed returns recent profile viewers.
+// GetWhoViewed returns profile viewer analytics.
+// The total count comes from the feed identity module widget (available to all accounts).
+// Individual viewer names require LinkedIn Premium.
 func (s *ProfileService) GetWhoViewed(start, count int) (*models.PagedProfileViewers, error) {
 	if count == 0 {
 		count = client.DefaultCount
 	}
-	params := map[string]string{
-		"q":     "viewedByMember",
-		"start": fmt.Sprintf("%d", start),
-		"count": fmt.Sprintf("%d", count),
+
+	// Step 1: fetch the viewer count from the feed identity module.
+	// This is the widget shown on the left rail — available to free accounts.
+	// The count is a text string (e.g. "91") in widgets[].statistic.text
+	// where widgetType == "WHO_VIEWED_MY_PROFILE".
+	identityPath := client.EndpointGraphQL +
+		"?includeWebMetadata=true&variables=()&queryId=" + client.EndpointFeedIdentityModuleQueryID
+
+	var identityRaw struct {
+		Data *struct {
+			FeedDashIdentityModuleByModuleType *struct {
+				Elements []struct {
+					Widgets []struct {
+						WidgetType string `json:"widgetType"`
+						Statistic  *struct {
+							Text string `json:"text"`
+						} `json:"statistic"`
+					} `json:"widgets"`
+				} `json:"elements"`
+			} `json:"feedDashIdentityModuleByModuleType"`
+		} `json:"data"`
+	}
+	totalCount := 0
+	if err := s.c.GetGraphQL(identityPath, &identityRaw); err == nil &&
+		identityRaw.Data != nil &&
+		identityRaw.Data.FeedDashIdentityModuleByModuleType != nil {
+		for _, el := range identityRaw.Data.FeedDashIdentityModuleByModuleType.Elements {
+			for _, w := range el.Widgets {
+				if w.WidgetType == "WHO_VIEWED_MY_PROFILE" && w.Statistic != nil {
+					clean := strings.ReplaceAll(w.Statistic.Text, ",", "")
+					if n, err := strconv.Atoi(clean); err == nil {
+						totalCount = n
+					}
+				}
+			}
+		}
 	}
 
-	var raw struct {
-		Elements []struct {
-			EntityURN   string             `json:"entityUrn"`
-			ViewedAt    int64              `json:"viewedAt,omitempty"`
-			ViewCount   int                `json:"viewCount,omitempty"`
-			MiniProfile voyagerMiniProfile `json:"miniProfile,omitempty"`
-		} `json:"elements"`
-		Paging struct {
-			Start int `json:"start"`
-			Count int `json:"count"`
-			Total int `json:"total"`
-		} `json:"paging"`
-	}
+	// Step 2: fetch individual viewer elements (requires Premium; empty for free accounts).
+	objPath := fmt.Sprintf(
+		"%s?includeWebMetadata=true&variables=(start:%d,query:(),analyticsEntityUrn:(activityUrn:urn%%3Ali%%3Adummy%%3A-1),surfaceType:WVMP)&queryId=voyagerPremiumDashAnalyticsObject.faf9c8e3233e83980f323f07c637b3c3",
+		client.EndpointGraphQL, start,
+	)
 
-	if err := s.c.Get(client.EndpointWVMPCards, params, &raw); err != nil {
+	var objRaw struct {
+		Data *struct {
+			PremiumDashAnalyticsObjectByAnalyticsEntity *struct {
+				Paging struct {
+					Total int `json:"total"`
+				} `json:"paging"`
+				Elements []struct {
+					EntityURN string `json:"entityUrn"`
+					ViewedAt  int64  `json:"viewedAt,omitempty"`
+					Actor     *struct {
+						MiniProfile voyagerMiniProfile `json:"miniProfile"`
+					} `json:"actor,omitempty"`
+				} `json:"elements"`
+			} `json:"premiumDashAnalyticsObjectByAnalyticsEntity"`
+		} `json:"data"`
+	}
+	if err := s.c.GetGraphQL(objPath, &objRaw); err != nil {
 		return nil, fmt.Errorf("get who viewed: %w", err)
+	}
+
+	var elements []struct {
+		EntityURN string `json:"entityUrn"`
+		ViewedAt  int64  `json:"viewedAt,omitempty"`
+		Actor     *struct {
+			MiniProfile voyagerMiniProfile `json:"miniProfile"`
+		} `json:"actor,omitempty"`
+	}
+	if objRaw.Data != nil && objRaw.Data.PremiumDashAnalyticsObjectByAnalyticsEntity != nil {
+		col := objRaw.Data.PremiumDashAnalyticsObjectByAnalyticsEntity
+		elements = col.Elements
+		if totalCount == 0 && col.Paging.Total > 0 {
+			totalCount = col.Paging.Total
+		}
 	}
 
 	result := &models.PagedProfileViewers{
 		Pagination: models.Pagination{
 			Start:   start,
 			Count:   count,
-			Total:   raw.Paging.Total,
-			HasMore: (start + count) < raw.Paging.Total,
+			Total:   totalCount,
+			HasMore: (start + count) < totalCount,
 		},
 	}
-	for _, el := range raw.Elements {
-		mp := el.MiniProfile
+	for _, el := range elements {
+		if el.Actor == nil {
+			continue
+		}
+		mp := el.Actor.MiniProfile
 		result.Items = append(result.Items, models.ProfileViewer{
 			Profile: models.Profile{
 				URN:       mp.EntityURN,
@@ -664,8 +725,7 @@ func (s *ProfileService) GetWhoViewed(start, count int) (*models.PagedProfileVie
 				LastName:  mp.LastName,
 				Headline:  mp.Occupation,
 			},
-			ViewedAt:  msToTime(el.ViewedAt),
-			ViewCount: el.ViewCount,
+			ViewedAt: msToTime(el.ViewedAt),
 		})
 	}
 	return result, nil

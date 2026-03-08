@@ -217,7 +217,7 @@ Fixed by updating `internal/client/client.go` to match real Chrome 145 values:
 | `profile contact` | ❌ 410 | LinkedIn deprecated this endpoint |
 | `profile experience list` | ✅ | returns empty if none set |
 | `profile education list` | ✅ | returns empty if none set |
-| `profile who-viewed` | ❌ 400 | endpoint needs investigation |
+| `profile who-viewed` | ✅ | total count returned for free accounts; individual names require Premium |
 | `search people` | ❌ 404 | `/voyager/api/search/hits` is deprecated — needs new endpoint |
 | `search jobs` | ❌ 404 | needs investigation |
 | `search companies` | ❌ 404 | `/voyager/api/search/hits` is deprecated — needs new endpoint |
@@ -249,7 +249,12 @@ Fixed by updating `internal/client/client.go` to match real Chrome 145 values:
 ### Known broken endpoints (need fixes)
 
 1. **`profile contact`** — `GET /voyager/api/identity/profiles/:id/profileContactInfo` returns 410. LinkedIn deprecated this. Need to find replacement or remove command.
-2. **`profile who-viewed`** — `GET /voyager/api/identity/wvmpCards` returns 400. Likely needs different query params or a new endpoint path.
-3. **`search people` / `search companies`** — `GET /voyager/api/search/hits` returns 404. Endpoint is deprecated. HAR shows LinkedIn now uses `/voyager/api/graphql` with `queryId` params for search. Needs research to find correct replacement endpoint.
-4. **`search jobs`** — `GET /voyager/api/jobs/search` returns 404. Needs replacement endpoint.
-5. **`search posts`** — `GET /voyager/api/search/blended` returns 404. Needs replacement endpoint.
+2. **`search people` / `search companies`** — `GET /voyager/api/search/hits` returns 404. Endpoint is deprecated. HAR shows LinkedIn now uses `/voyager/api/graphql` with `queryId` params for search. Needs research to find correct replacement endpoint.
+3. **`search jobs`** — `GET /voyager/api/jobs/search` returns 404. Needs replacement endpoint.
+4. **`search posts`** — `GET /voyager/api/search/blended` returns 404. Needs replacement endpoint.
+
+### Fixed endpoints
+
+- **`profile who-viewed`** — Was returning 400 from the deprecated `/identity/wvmpCards` endpoint. Fixed (2026-03-08) to use two GraphQL calls:
+  1. `voyagerFeedDashIdentityModule.803fe19f843a4d461478049f70d7babd` — returns the 90-day viewer count in `feedDashIdentityModuleByModuleType.elements[].widgets[]` where `widgetType == "WHO_VIEWED_MY_PROFILE"` and `statistic.text` is the count string. Available to free accounts.
+  2. `voyagerPremiumDashAnalyticsObject.faf9c8e3233e83980f323f07c637b3c3` — returns individual viewer details. Requires LinkedIn Premium; returns empty elements for free accounts.

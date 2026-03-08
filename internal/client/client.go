@@ -215,6 +215,17 @@ func (c *Client) Get(path string, params map[string]string, dest interface{}) er
 	return c.do(req, dest)
 }
 
+// GetGraphQL performs a GET to the GraphQL endpoint with a pre-formed query string.
+// It overrides the Accept header to application/json, which the graphql endpoint requires.
+func (c *Client) GetGraphQL(rawPath string, dest interface{}) error {
+	req, err := c.newRequest(http.MethodGet, rawPath, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	return c.do(req, dest)
+}
+
 // Post performs a POST request with a JSON body.
 func (c *Client) Post(path string, body interface{}, dest interface{}) error {
 	req, err := c.newRequest(http.MethodPost, path, body)

@@ -1,0 +1,21 @@
+{
+  "data": {
+    "feedDashIdentityModuleByModuleType": {
+      "elements": [
+        {
+          "widgets": [
+            {
+              "widgetType": "WHO_VIEWED_MY_PROFILE",
+              "statistic": {
+                "text": "42"
+              },
+              "headline": {
+                "text": "Profile viewers"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

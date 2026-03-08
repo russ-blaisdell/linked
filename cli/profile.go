@@ -1436,7 +1436,12 @@ func newProfileWhoViewedCmd() *cobra.Command {
 			}
 
 			if len(result.Items) == 0 {
-				p.Warn("No profile viewers found")
+				if result.Pagination.Total > 0 {
+					p.Printf("%d profile viewers in the past 90 days\n", result.Pagination.Total)
+					p.Warn("Individual viewer details require LinkedIn Premium")
+				} else {
+					p.Warn("No profile viewers found")
+				}
 				return nil
 			}
 

@@ -24,6 +24,7 @@ func NewProfileService(c *client.Client) *ProfileService {
 // voyagerMiniProfile is embedded in many Voyager responses.
 type voyagerMiniProfile struct {
 	EntityURN  string `json:"entityUrn"`
+	ObjectURN  string `json:"objectUrn,omitempty"`
 	PublicID   string `json:"publicIdentifier"`
 	FirstName  string `json:"firstName"`
 	LastName   string `json:"lastName"`
@@ -745,12 +746,15 @@ func (s *ProfileService) UploadProfilePhoto(profileID, filePath string) error {
 // extractProfileFromEnvelope tries to find a profile in a normalized Voyager envelope.
 func extractProfileFromEnvelope(env voyagerNormalizedEnvelope) (*models.Profile, error) {
 	for _, raw := range env.Included {
+		// Full profile with nested miniProfile (GetProfile responses).
 		var vp voyagerFullProfile
-		if err := json.Unmarshal(raw, &vp); err != nil {
-			continue
-		}
-		if vp.MiniProfile.EntityURN != "" {
+		if err := json.Unmarshal(raw, &vp); err == nil && vp.MiniProfile.EntityURN != "" {
 			return mapVoyagerProfile(vp), nil
+		}
+		// Direct MiniProfile item (GetMe responses — fields are at the top level).
+		var mp voyagerMiniProfile
+		if err := json.Unmarshal(raw, &mp); err == nil && mp.EntityURN != "" {
+			return mapMiniProfile(mp), nil
 		}
 	}
 	var vp voyagerFullProfile
@@ -761,6 +765,27 @@ func extractProfileFromEnvelope(env voyagerNormalizedEnvelope) (*models.Profile,
 		return nil, fmt.Errorf("empty profile in response")
 	}
 	return mapVoyagerProfile(vp), nil
+}
+
+// mapMiniProfile maps a flat voyagerMiniProfile to models.Profile.
+// Used when the MiniProfile is returned directly in the included array (e.g. /me).
+func mapMiniProfile(mp voyagerMiniProfile) *models.Profile {
+	urn := mp.ObjectURN
+	if urn == "" {
+		urn = mp.EntityURN
+	}
+	p := &models.Profile{
+		URN:       urn,
+		ProfileID: mp.PublicID,
+		FirstName: mp.FirstName,
+		LastName:  mp.LastName,
+		Headline:  mp.Occupation,
+	}
+	if mp.Picture != nil && len(mp.Picture.Artifacts) > 0 {
+		last := mp.Picture.Artifacts[len(mp.Picture.Artifacts)-1]
+		p.PhotoURL = mp.Picture.RootURL + last.FileIdentifyingURLPathSegment
+	}
+	return p
 }
 
 // mapVoyagerProfile converts a raw voyagerFullProfile to models.Profile.

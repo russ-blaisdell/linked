@@ -135,12 +135,16 @@ make build     # produces dist/linked
 
 `linked` authenticates using your LinkedIn session cookies — the same cookies your browser sends on every request. No LinkedIn developer account, OAuth app, or API key needed.
 
-You need two cookies from your logged-in browser session:
+You need four cookies from your logged-in browser session — all from the same browser session at the same time:
 
 | Cookie | What it looks like | Purpose |
 |--------|--------------------|---------|
 | `li_at` | `AQEDARxxxxxxx...` | Your session token |
-| `JSESSIONID` | `ajax:1234567890abcdef` | CSRF validation |
+| `JSESSIONID` | `"ajax:1234567890abcdef"` | CSRF validation (include surrounding quotes) |
+| `bcookie` | `"v=2&xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"` | Browser fingerprint (include surrounding quotes) |
+| `bscookie` | `"v=1&timestamp&uuid&token"` | Secure browser fingerprint (include surrounding quotes) |
+
+> **Important:** LinkedIn binds `li_at` to the `bcookie` it was issued with. All four cookies must be copied from the same browser session — mixing cookies from different sessions will immediately revoke the session.
 
 ### Setup
 
@@ -642,6 +646,7 @@ The [CI workflow](.github/workflows/ci.yml) runs on every push and pull request 
 - **Terms of Service** — This tool uses LinkedIn's internal Voyager API, the same API the LinkedIn website uses. It is not an officially supported developer integration. Use it for personal automation only.
 - **Rate limits** — LinkedIn rate-limits API requests. Avoid bulk or automated operations that could trigger throttling.
 - **Cookie security** — Your `li_at` cookie grants full access to your LinkedIn account. Never share it or commit it to version control. Credential files are stored with `0600` permissions.
+- **Known broken commands** — LinkedIn periodically deprecates Voyager API endpoints. The following commands are currently broken and need updated endpoints: `search people`, `search jobs`, `search companies`, `search posts` (all return 404 — LinkedIn moved search to graphql), `profile contact` (returns 410 — endpoint removed), `profile who-viewed` (returns 400 — needs investigation). See [CLAUDE.md](CLAUDE.md) for details.
 
 ---
 

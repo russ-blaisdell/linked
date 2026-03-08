@@ -34,15 +34,17 @@ func newAuthSetupCmd() *cobra.Command {
 		Short: "Configure LinkedIn session credentials",
 		Long: `Store your LinkedIn session cookies for linked to use.
 
-You need two cookies from your browser (Chrome / Firefox / Safari):
+You need four cookies from your browser (Chrome / Firefox / Safari):
 
   1. li_at       — your main LinkedIn session token
-  2. JSESSIONID  — used for CSRF validation (e.g. ajax:1234567890abcdef)
+  2. JSESSIONID  — used for CSRF validation (e.g. "ajax:1234567890abcdef")
+  3. bcookie     — browser fingerprint (e.g. "v=2&xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+  4. bscookie    — secure browser fingerprint (e.g. "v=1&timestamp&uuid&token")
 
 How to get them:
   1. Open LinkedIn in your browser and log in.
   2. Open DevTools → Application → Cookies → https://www.linkedin.com
-  3. Copy the values for 'li_at' and 'JSESSIONID'.
+  3. Copy the values for 'li_at', 'JSESSIONID', 'bcookie', and 'bscookie'.
 
 These are stored at:
   ~/.openclaw/credentials/linkedin/<profile>/creds.json  (mode 0600)
@@ -72,9 +74,25 @@ These are stored at:
 				return fmt.Errorf("JSESSIONID is required")
 			}
 
+			fmt.Print("  bcookie value: ")
+			bcookie, _ := reader.ReadString('\n')
+			bcookie = strings.TrimSpace(bcookie)
+			if bcookie == "" {
+				return fmt.Errorf("bcookie is required")
+			}
+
+			fmt.Print("  bscookie value: ")
+			bscookie, _ := reader.ReadString('\n')
+			bscookie = strings.TrimSpace(bscookie)
+			if bscookie == "" {
+				return fmt.Errorf("bscookie is required")
+			}
+
 			creds := &models.Credentials{
 				LiAt:       liAt,
 				JSESSIONID: jsessionid,
+				Bcookie:    bcookie,
+				Bscookie:   bscookie,
 			}
 
 			// Verify before saving.

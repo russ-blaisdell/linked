@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -15,8 +16,8 @@ import (
 )
 
 const (
-	userAgent      = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-	clientVersion  = "1.13.14099"
+	userAgent      = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+	clientVersion  = "1.13.42665"
 	defaultTimeout = 30 * time.Second
 )
 
@@ -27,6 +28,50 @@ type Client struct {
 	creds      *models.Credentials
 }
 
+// cookieTransport ensures auth cookies are sent with their exact stored values
+// (including surrounding quotes that Go's cookie jar would strip). It runs after
+// the jar has populated the Cookie header, strips any jar-set versions of the
+// auth cookies, then appends the correctly-formatted values from credentials.
+type cookieTransport struct {
+	base       http.RoundTripper
+	liAt       string
+	jsessionid string
+	bcookie    string // browser fingerprint — must match the session li_at was issued with
+	bscookie   string // secure browser fingerprint — also session-bound
+}
+
+func (t *cookieTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req = req.Clone(req.Context())
+
+	// Rebuild Cookie header: keep jar cookies except the ones we control.
+	var kept []string
+	for _, part := range strings.Split(req.Header.Get("Cookie"), "; ") {
+		if part == "" ||
+			strings.HasPrefix(part, "li_at=") ||
+			strings.HasPrefix(part, "JSESSIONID=") ||
+			(t.bcookie != "" && strings.HasPrefix(part, "bcookie=")) ||
+			(t.bscookie != "" && strings.HasPrefix(part, "bscookie=")) {
+			continue
+		}
+		kept = append(kept, part)
+	}
+	kept = append(kept, "li_at="+t.liAt, "JSESSIONID="+t.jsessionid)
+	if t.bcookie != "" {
+		kept = append(kept, "bcookie="+t.bcookie)
+	}
+	if t.bscookie != "" {
+		kept = append(kept, "bscookie="+t.bscookie)
+	}
+	req.Header.Set("Cookie", strings.Join(kept, "; "))
+
+	resp, err := t.base.RoundTrip(req)
+	if err == nil && os.Getenv("LINKED_DEBUG") != "" && (resp.StatusCode >= 300 && resp.StatusCode < 400) {
+		fmt.Fprintf(os.Stderr, "[debug] transport: %d Location=%s Set-Cookie=%v\n",
+			resp.StatusCode, resp.Header.Get("Location"), resp.Header["Set-Cookie"])
+	}
+	return resp, err
+}
+
 // New creates a Client using the given credentials against the real LinkedIn API.
 func New(creds *models.Credentials) (*Client, error) {
 	return NewWithBaseURL(creds, BaseURL)
@@ -34,26 +79,43 @@ func New(creds *models.Credentials) (*Client, error) {
 
 // NewWithBaseURL creates a Client with a custom base URL (used for mock server in tests).
 func NewWithBaseURL(creds *models.Credentials, baseURL string) (*Client, error) {
+	if _, err := url.Parse(baseURL); err != nil {
+		return nil, fmt.Errorf("parsing base URL: %w", err)
+	}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating cookie jar: %w", err)
 	}
-
-	parsed, err := url.Parse(baseURL)
-	if err != nil {
-		return nil, fmt.Errorf("parsing base URL: %w", err)
-	}
-
+	// Seed the jar with the lang cookie (no quote issues here).
+	parsed, _ := url.Parse(baseURL)
 	jar.SetCookies(parsed, []*http.Cookie{
-		{Name: "li_at", Value: creds.LiAt},
-		{Name: "JSESSIONID", Value: strings.Trim(creds.JSESSIONID, `"`)},
 		{Name: "lang", Value: "v=2&lang=en-us"},
 	})
 
+	transport := &cookieTransport{
+		base:       http.DefaultTransport,
+		liAt:       creds.LiAt,
+		jsessionid: creds.JSESSIONID,
+		bcookie:    creds.Bcookie,
+		bscookie:   creds.Bscookie,
+	}
 	return &Client{
-		httpClient: &http.Client{Jar: jar, Timeout: defaultTimeout},
-		baseURL:    baseURL,
-		creds:      creds,
+		httpClient: &http.Client{
+			Timeout:   defaultTimeout,
+			Jar:       jar,
+			Transport: transport,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if os.Getenv("LINKED_DEBUG") != "" {
+					fmt.Fprintf(os.Stderr, "[debug] redirect → %s\n", req.URL)
+				}
+				if len(via) >= 10 {
+					return fmt.Errorf("stopped after 10 redirects")
+				}
+				return nil
+			},
+		},
+		baseURL: baseURL,
+		creds:   creds,
 	}, nil
 }
 
@@ -85,11 +147,19 @@ func (c *Client) newRequest(method, path string, body interface{}) (*http.Reques
 	req.Header.Set("x-restli-protocol-version", "2.0.0")
 	req.Header.Set("x-li-lang", "en_US")
 	req.Header.Set("x-li-track", fmt.Sprintf(
-		`{"clientVersion":"%s","osName":"web","timezoneOffset":0,"timezone":"UTC","deviceFormFactor":"DESKTOP","mpName":"voyager-web"}`,
-		clientVersion,
+		`{"clientVersion":"%s","mpVersion":"%s","osName":"web","timezoneOffset":-5,"timezone":"America/New_York","deviceFormFactor":"DESKTOP","mpName":"voyager-web","displayDensity":2,"displayWidth":1920,"displayHeight":1080}`,
+		clientVersion, clientVersion,
 	))
 	req.Header.Set("Accept", "application/vnd.linkedin.normalized+json+2.1")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Origin", BaseURL)
+	req.Header.Set("Referer", BaseURL+"/feed/")
+	req.Header.Set("sec-ch-ua", `"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"`)
+	req.Header.Set("sec-ch-ua-mobile", "?0")
+	req.Header.Set("sec-ch-ua-platform", `"macOS"`)
+	req.Header.Set("sec-fetch-dest", "empty")
+	req.Header.Set("sec-fetch-mode", "cors")
+	req.Header.Set("sec-fetch-site", "same-origin")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -109,6 +179,11 @@ func (c *Client) do(req *http.Request, dest interface{}) error {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("reading response: %w", err)
+	}
+
+	if os.Getenv("LINKED_DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "[debug] %s %s → %d Set-Cookie=%v\n%s\n",
+			req.Method, req.URL, resp.StatusCode, resp.Header["Set-Cookie"], body)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

@@ -416,6 +416,8 @@ type PagedMutualConnections struct {
 type Credentials struct {
 	LiAt       string `json:"li_at"`
 	JSESSIONID string `json:"jsessionid"`
+	Bcookie    string `json:"bcookie,omitempty"`
+	Bscookie   string `json:"bscookie,omitempty"`
 	ProfileID  string `json:"profileId,omitempty"`
 	CreatedAt  string `json:"createdAt"`
 }

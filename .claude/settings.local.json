@@ -7,7 +7,28 @@
       "Bash(git:*)",
       "Bash(go build:*)",
       "Bash(go test:*)",
-      "Bash(gofmt:*)"
+      "Bash(gofmt:*)",
+      "Bash(make install:*)",
+      "Bash(cp dist/linked /usr/local/bin/linked)",
+      "Read(//usr/local/bin/**)",
+      "Bash(make test-short:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(pip3 install:*)",
+      "Bash(python3:*)",
+      "Bash(linked auth:*)",
+      "Bash(linked profile:*)",
+      "Bash(LINKED_DEBUG=1 linked auth:*)",
+      "Bash(go get:*)",
+      "Bash(printf AQEDAQAkit8EajlAAAABnM1jpgIAAAGc8XAqAlYAoMy9WMuVn43BSO0E0Gy25P89pmprDYenHHXwQ8IVIBNeiAknjdmMhr1Kdd2cVydumPp4hl27TZd69d7e2efm6UEPqKK-oZ0esjmBnb5hHx34ybYx\\\\n\"\"ajax:9205365172780550512\"\"\\\\n\"\"v=2&e332117c-dc36-4fcd-83c2-b3e8bb037e76\"\"\\\\n\"\"v=1&2025082216153728395d96-cdc2-469b-8de5-b49c9757060aAQGso-5Ne43FKW1K-oyfETIUMzEucl-j\"\"\\\\n:*)",
+      "Bash(dist/linked auth:*)",
+      "Bash(dist/linked:*)",
+      "Bash(go:*)",
+      "Bash(grep:*)",
+      "Bash(linked search:*)",
+      "Bash(LINKED_DEBUG=1 linked search:*)"
     ]
   }
 }

@@ -131,14 +131,17 @@ docs/
 ## Key Design Decisions
 
 ### Authentication
-- Cookie-based: `li_at` (session token) + `JSESSIONID` (CSRF token)
+- Cookie-based: `li_at` (session token) + `JSESSIONID` (CSRF token) + `bcookie` (browser fingerprint)
+- LinkedIn binds `li_at` to the `bcookie` it was issued with — sending a mismatched `bcookie` causes LinkedIn to immediately revoke the session (302 + `Set-Cookie: li_at=delete me`)
+- All three cookies must come from the same browser session
 - CSRF token = `JSESSIONID` with surrounding quotes stripped
 - All required headers set per request: `csrf-token`, `x-restli-protocol-version`, `x-li-lang`, `x-li-track`, `Accept`
 - Credentials stored at `~/.openclaw/credentials/linkedin/<profile>/creds.json` (mode 0600)
 
 ### Client Layer
-- `client.Client` wraps `net/http` with a cookie jar; exposes `Get`, `Post`, `Put`, `Delete`, `PutBinary`
-- `PutBinary` sends raw bytes to an external URL (used for media/photo uploads)
+- `client.Client` wraps `net/http` with a cookie jar + custom `cookieTransport`; exposes `Get`, `Post`, `Put`, `Delete`, `PutBinary`
+- `cookieTransport` injects `li_at`, `JSESSIONID`, and `bcookie` at the transport level so they are present on every request including redirect hops, with exact values (bypassing Go's cookie sanitizer which strips `"` from cookie values)
+- Go's `net/http` cookie jar sanitizes cookie values and strips `"` characters — this breaks LinkedIn's quoted `JSESSIONID` and `bcookie` values, hence the transport-level injection
 - `client.NewWithBaseURL` accepts a custom base URL so tests can point at the mock server
 - Errors are typed: 401 → auth error, 429 → rate limit error, 404 → not found
 
@@ -181,10 +184,72 @@ LinkedIn requires a three-step process for profile photos and image posts:
 ```json
 {
   "li_at": "AQEDARxxxxxxx...",
-  "jsessionid": "ajax:1234567890abcdef",
-  "profile": "default",
-  "created_at": "2025-01-01T00:00:00Z"
+  "jsessionid": "\"ajax:1234567890abcdef\"",
+  "bcookie": "\"v=2&xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\"",
+  "profileId": "your-profile-id",
+  "createdAt": "2025-01-01T00:00:00Z"
 }
 ```
 
 Stored at: `~/.openclaw/credentials/linkedin/<profile>/creds.json`
+
+---
+
+## Live API Test Results (2026-03-08)
+
+Auth was failing (session revoked after 2 calls). **Root cause: stale client fingerprint headers.**
+Fixed by updating `internal/client/client.go` to match real Chrome 145 values:
+- `userAgent` → Chrome/145
+- `clientVersion` → `1.13.42665`
+- `x-li-track` → added `mpVersion`, `displayDensity`, `displayWidth`, `displayHeight`; timezone `America/New_York`
+- Added `sec-ch-ua`, `sec-ch-ua-mobile`, `sec-ch-ua-platform` headers
+
+**When LinkedIn starts rejecting again:** capture a fresh HAR from Chrome DevTools (Network tab → right-click → Save all as HAR) and update these values to match the real browser.
+
+### Read-only command status
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| `auth whoami` | ✅ | |
+| `auth list` | ✅ | |
+| `profile get` | ✅ | |
+| `profile skills` | ✅ | returns empty if none set |
+| `profile contact` | ❌ 410 | LinkedIn deprecated this endpoint |
+| `profile experience list` | ✅ | returns empty if none set |
+| `profile education list` | ✅ | returns empty if none set |
+| `profile who-viewed` | ❌ 400 | endpoint needs investigation |
+| `search people` | ❌ 404 | `/voyager/api/search/hits` is deprecated — needs new endpoint |
+| `search jobs` | ❌ 404 | needs investigation |
+| `search companies` | ❌ 404 | `/voyager/api/search/hits` is deprecated — needs new endpoint |
+| `search posts` | ❌ 404 | needs investigation |
+| `messages list` | 🔲 not tested | |
+| `messages unread` | 🔲 not tested | |
+| `messages read` | 🔲 not tested | |
+| `connections list` | 🔲 not tested | |
+| `connections pending` | 🔲 not tested | |
+| `connections sent` | 🔲 not tested | |
+| `connections mutual` | 🔲 not tested | |
+| `jobs recommended` | 🔲 not tested | |
+| `jobs saved` | 🔲 not tested | |
+| `jobs applied` | 🔲 not tested | |
+| `jobs get` | 🔲 not tested | |
+| `jobs company` | 🔲 not tested | |
+| `companies get` | 🔲 not tested | |
+| `companies employees` | 🔲 not tested | |
+| `companies posts` | 🔲 not tested | |
+| `posts feed` | 🔲 not tested | |
+| `posts get` | 🔲 not tested | |
+| `posts comments` | 🔲 not tested | |
+| `posts activity` | 🔲 not tested | |
+| `recommendations received` | 🔲 not tested | |
+| `recommendations given` | 🔲 not tested | |
+| `notifications list` | 🔲 not tested | |
+| `notifications count` | 🔲 not tested | |
+
+### Known broken endpoints (need fixes)
+
+1. **`profile contact`** — `GET /voyager/api/identity/profiles/:id/profileContactInfo` returns 410. LinkedIn deprecated this. Need to find replacement or remove command.
+2. **`profile who-viewed`** — `GET /voyager/api/identity/wvmpCards` returns 400. Likely needs different query params or a new endpoint path.
+3. **`search people` / `search companies`** — `GET /voyager/api/search/hits` returns 404. Endpoint is deprecated. HAR shows LinkedIn now uses `/voyager/api/graphql` with `queryId` params for search. Needs research to find correct replacement endpoint.
+4. **`search jobs`** — `GET /voyager/api/jobs/search` returns 404. Needs replacement endpoint.
+5. **`search posts`** — `GET /voyager/api/search/blended` returns 404. Needs replacement endpoint.

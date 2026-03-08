@@ -46,7 +46,7 @@ func NewWithBaseURL(creds *models.Credentials, baseURL string) (*Client, error) 
 
 	jar.SetCookies(parsed, []*http.Cookie{
 		{Name: "li_at", Value: creds.LiAt},
-		{Name: "JSESSIONID", Value: creds.JSESSIONID},
+		{Name: "JSESSIONID", Value: strings.Trim(creds.JSESSIONID, `"`)},
 		{Name: "lang", Value: "v=2&lang=en-us"},
 	})
 

@@ -1,0 +1,28 @@
+{
+  "data": {
+    "relationshipsDashInvitationViewsByReceived": {
+      "paging": { "start": 0, "count": 20, "total": 1 },
+      "elements": [
+        {
+          "invitation": {
+            "entityUrn": "urn:li:fsd_invitation:inv001",
+            "invitationId": 12345,
+            "message": "I'd love to connect!",
+            "sharedSecret": "abc123",
+            "genericInviter": {
+              "memberProfileUrn": {
+                "entityUrn": "urn:li:fsd_profile:john-smith-id",
+                "objectUrn": "urn:li:member:987654321",
+                "firstName": "John",
+                "lastName": "Smith",
+                "occupation": "Engineering Manager"
+              }
+            }
+          },
+          "title": { "text": "John Smith" },
+          "subtitle": { "text": "Engineering Manager" }
+        }
+      ]
+    }
+  }
+}

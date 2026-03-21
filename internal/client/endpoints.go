@@ -10,6 +10,7 @@ const (
 
 	// Identity / Profiles
 	EndpointProfiles       = VoyagerAPI + "/identity/profiles"
+	EndpointDashProfiles   = VoyagerAPI + "/identity/dash/profiles"
 	EndpointProfileContact = VoyagerAPI + "/identity/profiles/%s/profileContactInfo"
 	EndpointProfileView    = VoyagerAPI + "/identity/profiles/%s/profileView"
 	EndpointMe             = VoyagerAPI + "/me"
@@ -53,7 +54,11 @@ const (
 	EndpointWVMPCards = VoyagerAPI + "/identity/wvmpCards" // deprecated — kept for mock compatibility
 
 	// Connections & Relationships
-	EndpointConnections       = VoyagerAPI + "/relationships/connections"
+	EndpointInvitationViewsQueryID     = "voyagerRelationshipsDashInvitationViews.57e1286f887065b96393b947e09ef04c"
+	EndpointInvitationsSummaryQueryID  = "voyagerRelationshipsDashInvitationsSummary.26002c38d857d2d5cd4503df1a43a0ab"
+	EndpointSentInvitationViewsQueryID = "voyagerRelationshipsDashSentInvitationViews.1901307baa315a33bf17bb743daf1250"
+	EndpointConnections                = VoyagerAPI + "/relationships/connections"
+	EndpointDashConnections            = VoyagerAPI + "/relationships/dash/connections"
 	EndpointConnection        = VoyagerAPI + "/relationships/connections/%s"
 	EndpointInvitations       = VoyagerAPI + "/relationships/invitationViews"
 	EndpointSentInvitations   = VoyagerAPI + "/relationships/sentInvitationViewsV2"
@@ -61,14 +66,24 @@ const (
 	EndpointFollowEntity      = VoyagerAPI + "/feed/follows"
 	EndpointMutualConnections = VoyagerAPI + "/relationships/connectionOf"
 
-	// Messaging
+	// Messaging (GraphQL)
+	EndpointMessengerConversationsQueryID = "voyagerMessagingDashMessengerConversations.ccc086e11ebcecef63b31ac465ccfebd"
+	EndpointMessengerMessagesQueryID      = "voyagerMessagingDashMessengerMessages.073958b6fdfe5f5ceeb4d0416523317e"
+	EndpointMessengerMailboxCountsQueryID = "voyagerMessagingDashMessengerMailboxCounts.15769ef365ec721fc539d76dbef5f813"
+
+	// Messaging (legacy — deprecated, kept for reference)
 	EndpointConversations      = VoyagerAPI + "/messaging/conversations"
 	EndpointConversationByID   = VoyagerAPI + "/messaging/conversations/%s"
 	EndpointConversationEvents = VoyagerAPI + "/messaging/conversations/%s/events"
 	EndpointMessageEventByID   = VoyagerAPI + "/messaging/conversations/%s/events/%s"
 	EndpointMessageCreate      = VoyagerAPI + "/messaging/conversations"
 
-	// Jobs
+	// Jobs (GraphQL)
+	EndpointJobsFeedQueryID     = "voyagerJobsDashJobsFeed.40bc6ea7c5b88757481d40f6e4527f17"
+	EndpointJobCardsQueryID     = "voyagerJobsDashJobCards.7fb7b035d6233f835789e4088cdbf44b"
+	EndpointJobPostingsQueryID  = "voyagerJobsDashJobPostings.891aed7916d7453a37e4bbf5f1f60de4"
+
+	// Jobs (legacy — deprecated, kept for save/unsave which still use REST)
 	EndpointJobSearch          = VoyagerAPI + "/jobs/jobPostings"
 	EndpointJobPosting         = VoyagerAPI + "/jobs/jobPostings/%s"
 	EndpointSavedJobs          = VoyagerAPI + "/jobs/jobSaves"
@@ -102,7 +117,11 @@ const (
 	EndpointRecommendationGiven = VoyagerAPI + "/identity/recommendations?q=given"
 	EndpointRecommendationByID  = VoyagerAPI + "/identity/recommendations/%s"
 
-	// Notifications
+	// Notifications (dash)
+	EndpointDashNotificationCards = VoyagerAPI + "/voyagerIdentityDashNotificationCards"
+	EndpointDashBadgingCounts     = VoyagerAPI + "/voyagerNotificationsDashBadgingItemCounts"
+
+	// Notifications (legacy — deprecated)
 	EndpointNotifications     = VoyagerAPI + "/feed/notifications"
 	EndpointNotificationBadge = VoyagerAPI + "/feed/notificationBadge"
 )

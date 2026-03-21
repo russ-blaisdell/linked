@@ -6,7 +6,7 @@
 
 Module: `github.com/russ-blaisdell/linked`
 Binary: `linked`
-Go version: 1.24+
+Go version: 1.25+
 
 ---
 
@@ -50,6 +50,7 @@ cli/                    Cobra command definitions, one file per domain
                           like-comment|activity
   recommendations.go    linked recommendations received|given|request|hide|show|decline|delete
   notifications.go      linked notifications list|mark-read|mark-all-read|count
+  raw.go                linked raw <path> — authenticated GET for API exploration
 
 internal/
   api/                  LinkedIn Voyager API service layer
@@ -91,9 +92,12 @@ internal/
     util.go             Shared helpers (urnToID, msToTime)
   client/
     client.go           HTTP client: cookie jar, CSRF header injection,
-                          GET/POST/PUT/DELETE/PutBinary wrappers
-    endpoints.go        BaseURL and all Voyager API path constants
+                          GET/POST/PUT/DELETE/PutBinary/GetGraphQL/RawGet wrappers
+    tls.go              Chrome TLS fingerprint via utls + HTTP/2 transport
+    endpoints.go        BaseURL, Voyager API path constants, GraphQL queryId constants
     errors.go           apiError — maps HTTP status codes to structured errors (401, 404, 429)
+  harparser/
+    harparser.go        Parse HAR files for browser fingerprint + cookies
   config/
     credentials.go      Load/Save/Delete/List credentials at
                           ~/.openclaw/credentials/linkedin/<profile>/creds.json
@@ -139,11 +143,14 @@ docs/
 - Credentials stored at `~/.openclaw/credentials/linkedin/<profile>/creds.json` (mode 0600)
 
 ### Client Layer
-- `client.Client` wraps `net/http` with a cookie jar + custom `cookieTransport`; exposes `Get`, `Post`, `Put`, `Delete`, `PutBinary`
-- `cookieTransport` injects `li_at`, `JSESSIONID`, and `bcookie` at the transport level so they are present on every request including redirect hops, with exact values (bypassing Go's cookie sanitizer which strips `"` from cookie values)
+- `client.Client` wraps `net/http` with a cookie jar + custom `cookieTransport`; exposes `Get`, `Post`, `Put`, `Delete`, `PutBinary`, `GetGraphQL`, `RawGet`
+- `cookieTransport` injects `li_at`, `JSESSIONID`, `bcookie`, and `bscookie` at the transport level so they are present on every request including redirect hops, with exact values (bypassing Go's cookie sanitizer which strips `"` from cookie values)
 - Go's `net/http` cookie jar sanitizes cookie values and strips `"` characters — this breaks LinkedIn's quoted `JSESSIONID` and `bcookie` values, hence the transport-level injection
-- `client.NewWithBaseURL` accepts a custom base URL so tests can point at the mock server
+- **TLS fingerprinting**: Uses `utls` (github.com/refraction-networking/utls) to present a Chrome TLS fingerprint, bypassing Cloudflare bot detection. Without this, Go's default TLS stack is flagged and sessions are revoked.
+- **HTTP/2**: Uses `golang.org/x/net/http2` transport for Chrome-fingerprinted connections, since LinkedIn requires HTTP/2 (visible as `:authority`/`:method` pseudo-headers in browser traffic).
+- `client.NewWithBaseURL` accepts a custom base URL so tests can point at the mock server (uses default transport for localhost, Chrome TLS for real LinkedIn)
 - Errors are typed: 401 → auth error, 429 → rate limit error, 404 → not found
+- `RawGet` returns raw response bytes for endpoint exploration (`linked raw` command)
 
 ### Media Upload Flow
 LinkedIn requires a three-step process for profile photos and image posts:
@@ -186,75 +193,90 @@ LinkedIn requires a three-step process for profile photos and image posts:
   "li_at": "AQEDARxxxxxxx...",
   "jsessionid": "\"ajax:1234567890abcdef\"",
   "bcookie": "\"v=2&xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\"",
+  "bscookie": "\"v=1&timestamp&uuid&token\"",
   "profileId": "your-profile-id",
-  "createdAt": "2025-01-01T00:00:00Z"
+  "createdAt": "2025-01-01T00:00:00Z",
+  "fingerprint": {
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) ...",
+    "secChUa": "\"Chromium\";v=\"146\", ...",
+    "secChUaPlatform": "\"Linux\"",
+    "xLiTrack": "{\"clientVersion\":\"1.13.42665\", ...}"
+  }
 }
 ```
+
+The `fingerprint` field is optional — populated by `linked auth setup --har <file>`. When present, these values override the hardcoded defaults in the HTTP client. When absent, defaults matching Linux + Chrome 146 are used.
 
 Stored at: `~/.openclaw/credentials/linkedin/<profile>/creds.json`
 
 ---
 
-## Live API Test Results (2026-03-08)
+## Live API Test Results (2026-03-21)
 
-Auth was failing (session revoked after 2 calls). **Root cause: stale client fingerprint headers.**
-Fixed by updating `internal/client/client.go` to match real Chrome 145 values:
-- `userAgent` → Chrome/145
-- `clientVersion` → `1.13.42665`
-- `x-li-track` → added `mpVersion`, `displayDensity`, `displayWidth`, `displayHeight`; timezone `America/New_York`
-- Added `sec-ch-ua`, `sec-ch-ua-mobile`, `sec-ch-ua-platform` headers
+LinkedIn has deprecated most of the old Voyager REST API (`/voyager/api/*`) and migrated to GraphQL (`/voyager/api/graphql?queryId=...`) and Dash endpoints (`/voyager/api/voyager*Dash*`, `/voyager/api/*/dash/*`). Session revocation was caused by Go's default TLS fingerprint being flagged by Cloudflare — fixed with `utls` Chrome fingerprint impersonation and HTTP/2 support.
 
-**When LinkedIn starts rejecting again:** capture a fresh HAR from Chrome DevTools (Network tab → right-click → Save all as HAR) and update these values to match the real browser.
+**When LinkedIn starts rejecting sessions:** capture a fresh HAR from Chrome DevTools and run `linked auth setup --har <file>` to update the browser fingerprint stored in credentials.
 
-### Read-only command status
+### Command status
 
-| Command | Status | Notes |
-|---------|--------|-------|
-| `auth whoami` | ✅ | |
-| `auth list` | ✅ | |
-| `profile get` | ✅ | |
+| Command | Status | Endpoint |
+|---------|--------|----------|
+| `auth setup` | ✅ | `--har` flag extracts browser fingerprint |
+| `auth whoami` | ✅ | `/voyager/api/me` |
+| `auth list` | ✅ | local only |
+| `auth remove` | ✅ | local only |
+| `profile get` | ✅ | self: `/me`; others: `/identity/dash/profiles?q=memberIdentity` |
 | `profile skills` | ✅ | returns empty if none set |
-| `profile contact` | ❌ 410 | LinkedIn deprecated this endpoint |
 | `profile experience list` | ✅ | returns empty if none set |
 | `profile education list` | ✅ | returns empty if none set |
-| `profile who-viewed` | ✅ | total count returned for free accounts; individual names require Premium |
-| `search people` | ❌ 404 | `/voyager/api/search/hits` is deprecated — needs new endpoint |
-| `search jobs` | ❌ 404 | needs investigation |
-| `search companies` | ❌ 404 | `/voyager/api/search/hits` is deprecated — needs new endpoint |
-| `search posts` | ❌ 404 | needs investigation |
-| `messages list` | 🔲 not tested | |
-| `messages unread` | 🔲 not tested | |
-| `messages read` | 🔲 not tested | |
-| `connections list` | 🔲 not tested | |
-| `connections pending` | 🔲 not tested | |
-| `connections sent` | 🔲 not tested | |
-| `connections mutual` | 🔲 not tested | |
-| `jobs recommended` | 🔲 not tested | |
-| `jobs saved` | 🔲 not tested | |
-| `jobs applied` | 🔲 not tested | |
-| `jobs get` | 🔲 not tested | |
-| `jobs company` | 🔲 not tested | |
-| `companies get` | 🔲 not tested | |
-| `companies employees` | 🔲 not tested | |
-| `companies posts` | 🔲 not tested | |
-| `posts feed` | 🔲 not tested | |
-| `posts get` | 🔲 not tested | |
-| `posts comments` | 🔲 not tested | |
-| `posts activity` | 🔲 not tested | |
-| `recommendations received` | 🔲 not tested | |
-| `recommendations given` | 🔲 not tested | |
-| `notifications list` | 🔲 not tested | |
-| `notifications count` | 🔲 not tested | |
+| `profile who-viewed` | ✅ | GraphQL `voyagerFeedDashIdentityModule` + `voyagerPremiumDashAnalyticsObject` |
+| `profile contact` | ❌ 410 | deprecated, no replacement found |
+| `connections list` | ✅ | `/relationships/dash/connections` + `/identity/dash/profiles` for name resolution |
+| `connections pending` | ✅ | GraphQL `voyagerRelationshipsDashInvitationViews` + `InvitationsSummary` for total count |
+| `connections sent` | ❌ 400 | old REST endpoint dead, needs GraphQL migration |
+| `connections mutual` | ❌ 404 | old REST endpoint dead |
+| `messages list` | ✅ | GraphQL `voyagerMessagingDashMessengerConversations` (find-conversations-by-category) |
+| `messages unread` | ✅ | same endpoint, filtered client-side |
+| `messages read` | ✅ | GraphQL `voyagerMessagingDashMessengerMessages` (get-messages-by-conversation) |
+| `messages send` | ⏸️ stubbed | old REST dead, new write protocol unknown |
+| `messages mark-read` | ⏸️ stubbed | new write protocol unknown |
+| `messages star/unstar` | ⏸️ stubbed | new write protocol unknown |
+| `messages archive/unarchive` | ⏸️ stubbed | new write protocol unknown |
+| `messages delete*` | ⏸️ stubbed | new write protocol unknown |
+| `posts feed` | ✅ | `/feed/updatesV2?q=feed` (normalized format, actor resolution from header + actor fields) |
+| `posts get/create/edit/delete` | ❌ 404 | `/ugcPosts` dead |
+| `posts like/unlike/comment` | ❌ 404 | `/socialActions` dead |
+| `posts activity` | ❌ 400 | needs new query param |
+| `jobs get` | ✅ | GraphQL `voyagerJobsDashJobPostings` (fetch-full-job-posting) |
+| `jobs recommended` | ✅ | GraphQL `voyagerJobsDashJobsFeed` (full-jobs-feed-get-all) |
+| `jobs saved` | ✅ | GraphQL `voyagerJobsDashJobCards` (job-cards-by-job-search-v2, slug=saved) |
+| `jobs applied` | ✅ | GraphQL `voyagerJobsDashJobCards` (slug=applied) |
+| `jobs company` | ❌ 404 | old search endpoint dead |
+| `companies get` | ✅ | `/organization/companies?q=universalName` (normalized response) |
+| `companies posts` | ❌ 400 | needs new endpoint |
+| `companies employees` | ❌ 404 | uses dead search endpoint |
+| `search people` | ❌ 404 | `/search/hits` deprecated, needs GraphQL migration |
+| `search jobs` | ❌ 404 | `/jobs/search` dead |
+| `search companies` | ❌ 404 | `/search/hits` deprecated |
+| `search posts` | ❌ 404 | `/search/blended` dead |
+| `notifications list` | ✅ | `/voyagerIdentityDashNotificationCards` (normalized format) |
+| `notifications count` | ✅ | `/voyagerNotificationsDashBadgingItemCounts` |
+| `notifications mark-read` | ⏸️ stubbed | new endpoint unknown |
+| `recommendations *` | ❌ 404 | `/identity/recommendations` dead |
+| `raw` | ✅ | debug command for endpoint exploration |
 
-### Known broken endpoints (need fixes)
+### GraphQL queryId reference
 
-1. **`profile contact`** — `GET /voyager/api/identity/profiles/:id/profileContactInfo` returns 410. LinkedIn deprecated this. Need to find replacement or remove command.
-2. **`search people` / `search companies`** — `GET /voyager/api/search/hits` returns 404. Endpoint is deprecated. HAR shows LinkedIn now uses `/voyager/api/graphql` with `queryId` params for search. Needs research to find correct replacement endpoint.
-3. **`search jobs`** — `GET /voyager/api/jobs/search` returns 404. Needs replacement endpoint.
-4. **`search posts`** — `GET /voyager/api/search/blended` returns 404. Needs replacement endpoint.
-
-### Fixed endpoints
-
-- **`profile who-viewed`** — Was returning 400 from the deprecated `/identity/wvmpCards` endpoint. Fixed (2026-03-08) to use two GraphQL calls:
-  1. `voyagerFeedDashIdentityModule.803fe19f843a4d461478049f70d7babd` — returns the 90-day viewer count in `feedDashIdentityModuleByModuleType.elements[].widgets[]` where `widgetType == "WHO_VIEWED_MY_PROFILE"` and `statistic.text` is the count string. Available to free accounts.
-  2. `voyagerPremiumDashAnalyticsObject.faf9c8e3233e83980f323f07c637b3c3` — returns individual viewer details. Requires LinkedIn Premium; returns empty elements for free accounts.
+| queryId | Purpose |
+|---------|---------|
+| `voyagerFeedDashIdentityModule.803fe19f843a4d461478049f70d7babd` | Who-viewed count (feed widget) |
+| `voyagerPremiumDashAnalyticsObject.faf9c8e3233e83980f323f07c637b3c3` | Who-viewed details (Premium) |
+| `voyagerRelationshipsDashInvitationViews.57e1286f887065b96393b947e09ef04c` | Pending invitations |
+| `voyagerRelationshipsDashInvitationsSummary.26002c38d857d2d5cd4503df1a43a0ab` | Invitation count summary |
+| `voyagerRelationshipsDashSentInvitationViews.1901307baa315a33bf17bb743daf1250` | Sent invitations |
+| `voyagerMessagingDashMessengerConversations.ccc086e11ebcecef63b31ac465ccfebd` | Conversation list (by category) |
+| `voyagerMessagingDashMessengerMessages.073958b6fdfe5f5ceeb4d0416523317e` | Messages in conversation |
+| `voyagerMessagingDashMessengerMailboxCounts.15769ef365ec721fc539d76dbef5f813` | Mailbox unread counts |
+| `voyagerJobsDashJobsFeed.40bc6ea7c5b88757481d40f6e4527f17` | Recommended jobs feed |
+| `voyagerJobsDashJobCards.7fb7b035d6233f835789e4088cdbf44b` | Job cards (saved/applied collections) |
+| `voyagerJobsDashJobPostings.891aed7916d7453a37e4bbf5f1f60de4` | Single job posting detail |

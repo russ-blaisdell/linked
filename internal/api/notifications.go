@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/russ-blaisdell/linked/internal/client"
@@ -18,57 +19,78 @@ func NewNotificationsService(c *client.Client) *NotificationsService {
 }
 
 // List returns recent notifications for the authenticated user.
+// Uses the dash notification cards endpoint with normalized response format.
 func (s *NotificationsService) List(start, count int) (*models.PagedNotifications, error) {
 	if count == 0 {
 		count = client.DefaultCount
 	}
-	params := map[string]string{
-		"q":     "me",
-		"start": fmt.Sprintf("%d", start),
-		"count": fmt.Sprintf("%d", count),
-	}
+	path := fmt.Sprintf(
+		"%s?decorationId=com.linkedin.voyager.dash.deco.identity.notifications.CardsCollectionWithInjectionsNoPills-24&count=%d&start=%d&q=filterVanityName",
+		client.EndpointDashNotificationCards, count, start,
+	)
 
 	var raw struct {
-		Elements []struct {
-			EntityURN        string `json:"entityUrn"`
-			ReadAt           *int64 `json:"readAt,omitempty"`
-			CreatedAt        int64  `json:"createdAt"`
-			NotificationType string `json:"notificationType,omitempty"`
-			HeadlineText     struct {
-				Text string `json:"text"`
-			} `json:"headlineText,omitempty"`
-			EntityEmbeddedObject struct {
-				Urn string `json:"urn,omitempty"`
-			} `json:"entityEmbeddedObject,omitempty"`
-		} `json:"elements"`
-		Paging struct {
-			Start int `json:"start"`
-			Count int `json:"count"`
-			Total int `json:"total"`
-		} `json:"paging"`
+		Data struct {
+			Elements []string `json:"*elements"`
+			Paging   struct {
+				Start int `json:"start"`
+				Count int `json:"count"`
+			} `json:"paging"`
+		} `json:"data"`
+		Included []json.RawMessage `json:"included"`
 	}
 
-	if err := s.c.Get(client.EndpointNotifications, params, &raw); err != nil {
+	if err := s.c.Get(path, nil, &raw); err != nil {
 		return nil, fmt.Errorf("list notifications: %w", err)
+	}
+
+	// Index included entities.
+	byURN := make(map[string]json.RawMessage)
+	for _, inc := range raw.Included {
+		var peek struct {
+			EntityURN string `json:"entityUrn"`
+		}
+		if json.Unmarshal(inc, &peek) == nil && peek.EntityURN != "" {
+			byURN[peek.EntityURN] = inc
+		}
 	}
 
 	result := &models.PagedNotifications{
 		Pagination: models.Pagination{
 			Start:   start,
 			Count:   count,
-			Total:   raw.Paging.Total,
-			HasMore: (start + count) < raw.Paging.Total,
+			Total:   len(raw.Data.Elements),
+			HasMore: len(raw.Data.Elements) >= count,
 		},
 	}
-	for _, el := range raw.Elements {
+
+	for _, urn := range raw.Data.Elements {
+		cardRaw, ok := byURN[urn]
+		if !ok {
+			continue
+		}
+		var card struct {
+			EntityURN   string `json:"entityUrn"`
+			Headline    *struct{ Text string `json:"text"` } `json:"headline"`
+			BodyText    *struct{ Text string `json:"text"` } `json:"bodyText"`
+			Read        bool  `json:"read"`
+			PublishedAt int64 `json:"publishedAt"`
+		}
+		if json.Unmarshal(cardRaw, &card) != nil {
+			continue
+		}
+
+		headline := ""
+		if card.Headline != nil {
+			headline = card.Headline.Text
+		}
+
 		n := models.Notification{
-			URN:       el.EntityURN,
-			ID:        urnToID(el.EntityURN),
-			Type:      el.NotificationType,
-			Body:      el.HeadlineText.Text,
-			Read:      el.ReadAt != nil,
-			CreatedAt: msToTime(el.CreatedAt),
-			EntityURN: el.EntityEmbeddedObject.Urn,
+			URN:       card.EntityURN,
+			ID:        urnToID(card.EntityURN),
+			Body:      headline,
+			Read:      card.Read,
+			CreatedAt: msToTime(card.PublishedAt),
 		}
 		result.Items = append(result.Items, n)
 	}
@@ -76,24 +98,34 @@ func (s *NotificationsService) List(start, count int) (*models.PagedNotification
 }
 
 // MarkRead marks a single notification as read.
+// TODO: Needs migration to new endpoint.
 func (s *NotificationsService) MarkRead(notificationURN string) error {
-	path := fmt.Sprintf("%s/%s", client.EndpointNotifications, urnToID(notificationURN))
-	return s.c.Put(path, map[string]interface{}{"read": true}, nil)
+	return fmt.Errorf("mark read is not yet supported (endpoint migration in progress)")
 }
 
 // MarkAllRead marks all notifications as read.
+// TODO: Needs migration to new endpoint.
 func (s *NotificationsService) MarkAllRead() error {
-	path := client.EndpointNotifications + "?action=markAllSeen"
-	return s.c.Post(path, map[string]interface{}{}, nil)
+	return fmt.Errorf("mark all read is not yet supported (endpoint migration in progress)")
 }
 
 // GetBadgeCount returns the count of unread notifications.
 func (s *NotificationsService) GetBadgeCount() (*models.NotificationBadge, error) {
 	var raw struct {
-		Count int `json:"count"`
+		Data struct {
+			Elements []struct {
+				BadgingItem string `json:"badgingItem"`
+				Count       int    `json:"count"`
+			} `json:"elements"`
+		} `json:"data"`
 	}
-	if err := s.c.Get(client.EndpointNotificationBadge, nil, &raw); err != nil {
+	if err := s.c.Get(client.EndpointDashBadgingCounts, nil, &raw); err != nil {
 		return nil, fmt.Errorf("get notification badge: %w", err)
 	}
-	return &models.NotificationBadge{UnreadCount: raw.Count}, nil
+	for _, elem := range raw.Data.Elements {
+		if elem.BadgingItem == "NOTIFICATIONS" {
+			return &models.NotificationBadge{UnreadCount: elem.Count}, nil
+		}
+	}
+	return &models.NotificationBadge{UnreadCount: 0}, nil
 }

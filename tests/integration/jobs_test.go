@@ -27,8 +27,14 @@ func TestGetJob(t *testing.T) {
 	if job.Description == "" {
 		t.Error("job description should not be empty")
 	}
-	if job.PostedAt == "" {
-		t.Error("PostedAt should not be empty")
+	if job.Location != "San Francisco, CA" {
+		t.Errorf("Location = %q, want %q", job.Location, "San Francisco, CA")
+	}
+	if job.EmploymentType != "Full-time" {
+		t.Errorf("EmploymentType = %q, want %q", job.EmploymentType, "Full-time")
+	}
+	if job.ApplyURL == "" {
+		t.Error("ApplyURL should not be empty")
 	}
 }
 
@@ -41,10 +47,22 @@ func TestListSavedJobs(t *testing.T) {
 		t.Fatalf("ListSavedJobs() error: %v", err)
 	}
 
+	if len(result.Items) == 0 {
+		t.Fatal("expected at least one saved job")
+	}
+
 	for _, j := range result.Items {
 		if !j.Saved {
 			t.Errorf("job %s should be marked saved", j.ID)
 		}
+	}
+
+	job := result.Items[0]
+	if job.Title != "Senior Go Engineer" {
+		t.Errorf("Title = %q, want %q", job.Title, "Senior Go Engineer")
+	}
+	if job.Company.Name != "TechCorp" {
+		t.Errorf("Company.Name = %q, want %q", job.Company.Name, "TechCorp")
 	}
 }
 
@@ -68,8 +86,37 @@ func TestListAppliedJobs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListAppliedJobs() error: %v", err)
 	}
-	// applied jobs fixture is empty — just verify no error
-	_ = result
+	// applied jobs fixture is empty -- just verify no error
+	if len(result.Items) != 0 {
+		t.Errorf("expected 0 applied jobs, got %d", len(result.Items))
+	}
+}
+
+func TestGetRecommendedJobs(t *testing.T) {
+	s := startServer(t)
+	li := newTestLinkedIn(t, s)
+
+	result, err := li.Jobs.GetRecommendedJobs(0, 20)
+	if err != nil {
+		t.Fatalf("GetRecommendedJobs() error: %v", err)
+	}
+
+	if len(result.Items) < 2 {
+		t.Fatalf("expected at least 2 recommended jobs, got %d", len(result.Items))
+	}
+
+	job := result.Items[0]
+	if job.Title != "Senior Go Engineer" {
+		t.Errorf("Title = %q, want %q", job.Title, "Senior Go Engineer")
+	}
+	if job.ID != "987654321" {
+		t.Errorf("ID = %q, want %q", job.ID, "987654321")
+	}
+
+	job2 := result.Items[1]
+	if job2.Title != "Backend Developer" {
+		t.Errorf("Title = %q, want %q", job2.Title, "Backend Developer")
+	}
 }
 
 func TestSearchJobs(t *testing.T) {

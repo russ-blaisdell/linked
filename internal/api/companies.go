@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/russ-blaisdell/linked/internal/client"
@@ -23,50 +24,48 @@ type voyagerCompany struct {
 	Name          string `json:"name"`
 	Tagline       string `json:"tagline,omitempty"`
 	Description   string `json:"description,omitempty"`
-	Industry      struct {
-		LocalizedName string `json:"localizedName"`
-	} `json:"industry,omitempty"`
-	Website      string `json:"websiteUrl,omitempty"`
-	Headquarters struct {
+	Industries    []string `json:"industries,omitempty"`
+	Website       string `json:"companyPageUrl,omitempty"`
+	Headquarters  struct {
 		City    string `json:"city,omitempty"`
 		Country string `json:"country,omitempty"`
 	} `json:"headquarter,omitempty"`
-	StaffCount      int `json:"staffCount,omitempty"`
-	StaffCountRange struct {
-		Start int `json:"start"`
-		End   int `json:"end"`
-	} `json:"staffCountRange,omitempty"`
-	Logo struct {
-		Image struct {
-			Artifacts []struct {
-				FileIdentifyingURLPathSegment string `json:"fileIdentifyingUrlPathSegment"`
-			} `json:"artifacts"`
-			RootURL string `json:"rootUrl"`
-		} `json:"com.linkedin.voyager.common.MediaProcessorImage"`
-	} `json:"logoResolutionResult,omitempty"`
+	StaffCount      int    `json:"staffCount,omitempty"`
+	CompanyType     struct {
+		LocalizedName string `json:"localizedName"`
+	} `json:"companyType,omitempty"`
+	Specialities []string `json:"specialities,omitempty"`
 }
 
 // GetCompany returns information about a company by universalName or ID.
+// The response uses normalized format (data.*elements + included).
 func (s *CompaniesService) GetCompany(companyID string) (*models.Company, error) {
 	params := map[string]string{
 		"q":             "universalName",
 		"universalName": companyID,
-		"decorationId":  "com.linkedin.voyager.deco.organization.web.WebFullCompanyMain-12",
 	}
 
 	var raw struct {
-		Elements []voyagerCompany `json:"elements"`
+		Data struct {
+			Elements []string `json:"*elements"`
+		} `json:"data"`
+		Included []json.RawMessage `json:"included"`
 	}
 
 	if err := s.c.Get(client.EndpointCompanies, params, &raw); err != nil {
 		return nil, fmt.Errorf("get company %q: %w", companyID, err)
 	}
 
-	if len(raw.Elements) == 0 {
-		return nil, fmt.Errorf("company not found: %s", companyID)
+	// Find the company entity in included.
+	for _, inc := range raw.Included {
+		var vc voyagerCompany
+		if json.Unmarshal(inc, &vc) != nil || vc.Name == "" {
+			continue
+		}
+		return mapVoyagerCompany(vc), nil
 	}
 
-	return mapVoyagerCompany(raw.Elements[0]), nil
+	return nil, fmt.Errorf("company not found: %s", companyID)
 }
 
 // FollowCompany follows a company.
@@ -207,13 +206,17 @@ func (s *CompaniesService) GetCompanyEmployees(companyID string, start, count in
 
 // mapVoyagerCompany converts a raw company to models.Company.
 func mapVoyagerCompany(vc voyagerCompany) *models.Company {
+	industry := ""
+	if len(vc.Industries) > 0 {
+		industry = vc.Industries[0]
+	}
 	co := &models.Company{
 		URN:         vc.EntityURN,
 		ID:          vc.UniversalName,
 		Name:        vc.Name,
 		Headline:    vc.Tagline,
 		Description: vc.Description,
-		Industry:    vc.Industry.LocalizedName,
+		Industry:    industry,
 		Website:     vc.Website,
 	}
 	if vc.Headquarters.City != "" {
@@ -221,12 +224,12 @@ func mapVoyagerCompany(vc voyagerCompany) *models.Company {
 	}
 	if vc.StaffCount > 0 {
 		co.EmployeeCount = fmt.Sprintf("%d", vc.StaffCount)
-	} else if vc.StaffCountRange.Start > 0 {
-		co.EmployeeCount = fmt.Sprintf("%d-%d", vc.StaffCountRange.Start, vc.StaffCountRange.End)
 	}
-	img := vc.Logo.Image
-	if len(img.Artifacts) > 0 {
-		co.LogoURL = img.RootURL + img.Artifacts[len(img.Artifacts)-1].FileIdentifyingURLPathSegment
+	if vc.CompanyType.LocalizedName != "" {
+		co.Industry = vc.CompanyType.LocalizedName
+		if industry != "" {
+			co.Industry = industry
+		}
 	}
 	return co
 }

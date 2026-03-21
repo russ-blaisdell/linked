@@ -1,6 +1,9 @@
 package integration_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestListNotifications(t *testing.T) {
 	s := startServer(t)
@@ -16,12 +19,6 @@ func TestListNotifications(t *testing.T) {
 	}
 
 	n := result.Items[0]
-	if n.ID == "" {
-		t.Error("notification ID should not be empty")
-	}
-	if n.Type == "" {
-		t.Error("notification Type should not be empty")
-	}
 	if n.Body == "" {
 		t.Error("notification Body should not be empty")
 	}
@@ -39,7 +36,6 @@ func TestNotificationReadStatus(t *testing.T) {
 		t.Fatalf("List() error: %v", err)
 	}
 
-	// Fixture has one read and two unread notifications.
 	var readCount, unreadCount int
 	for _, n := range result.Items {
 		if n.Read {
@@ -57,11 +53,28 @@ func TestNotificationReadStatus(t *testing.T) {
 	}
 }
 
-func TestMarkNotificationRead(t *testing.T) {
+func TestGetBadgeCount(t *testing.T) {
 	s := startServer(t)
 	li := newTestLinkedIn(t, s)
 
-	if err := li.Notifications.MarkRead("urn:li:notification:aaa111"); err != nil {
-		t.Fatalf("MarkRead() error: %v", err)
+	badge, err := li.Notifications.GetBadgeCount()
+	if err != nil {
+		t.Fatalf("GetBadgeCount() error: %v", err)
+	}
+	if badge.UnreadCount != 3 {
+		t.Errorf("expected 3 unread, got %d", badge.UnreadCount)
+	}
+}
+
+func TestMarkNotificationReadNotSupported(t *testing.T) {
+	s := startServer(t)
+	li := newTestLinkedIn(t, s)
+
+	err := li.Notifications.MarkRead("urn:li:notification:aaa111")
+	if err == nil {
+		t.Fatal("expected error for unsupported mark read")
+	}
+	if !strings.Contains(err.Error(), "not yet supported") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

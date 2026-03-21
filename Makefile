@@ -14,7 +14,7 @@ build:
 
 ## install: install linked into /usr/local/bin
 install: build
-	install -m 0755 $(BUILD_DIR)/$(BINARY) /usr/local/bin/$(BINARY)
+	/usr/bin/install -m 0755 $(BUILD_DIR)/$(BINARY) /usr/local/bin/$(BINARY)
 	@echo "✓ linked installed to /usr/local/bin/linked"
 
 ## test: run all integration tests

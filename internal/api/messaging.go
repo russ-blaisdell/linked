@@ -1,7 +1,9 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/russ-blaisdell/linked/internal/client"
@@ -10,7 +12,8 @@ import (
 
 // MessagingService handles LinkedIn messaging operations.
 type MessagingService struct {
-	c *client.Client
+	c          *client.Client
+	profileURN string // lazily resolved fsd_profile URN for the authenticated user
 }
 
 // NewMessagingService returns a new MessagingService.
@@ -18,72 +21,146 @@ func NewMessagingService(c *client.Client) *MessagingService {
 	return &MessagingService{c: c}
 }
 
-// voyagerMessageEvent is the inner content of a messaging event.
-type voyagerMessageEvent struct {
-	AttributedBody struct {
+// getProfileURN returns the authenticated user's fsd_profile URN,
+// fetching it from /me on first call and caching the result.
+func (s *MessagingService) getProfileURN() (string, error) {
+	if s.profileURN != "" {
+		return s.profileURN, nil
+	}
+	var raw struct {
+		Included []json.RawMessage `json:"included"`
+	}
+	if err := s.c.Get(client.EndpointMe, nil, &raw); err != nil {
+		return "", fmt.Errorf("get profile URN: %w", err)
+	}
+	for _, inc := range raw.Included {
+		var peek struct {
+			DashEntityURN string `json:"dashEntityUrn"`
+		}
+		if json.Unmarshal(inc, &peek) == nil && peek.DashEntityURN != "" {
+			s.profileURN = peek.DashEntityURN
+			return s.profileURN, nil
+		}
+	}
+	return "", fmt.Errorf("could not determine profile URN from /me")
+}
+
+// GraphQL response types for the messenger API.
+
+type gqlMessengerText struct {
+	Text string `json:"text"`
+}
+
+type gqlMessengerParticipant struct {
+	HostIdentityURN string `json:"hostIdentityUrn"`
+	ParticipantType *struct {
+		Member *struct {
+			FirstName *gqlMessengerText `json:"firstName"`
+			LastName  *gqlMessengerText `json:"lastName"`
+		} `json:"member"`
+	} `json:"participantType"`
+}
+
+type gqlMessengerMessage struct {
+	EntityURN   string `json:"entityUrn"`
+	DeliveredAt int64  `json:"deliveredAt"`
+	Body        *struct {
 		Text string `json:"text"`
-	} `json:"attributedBody"`
+	} `json:"body"`
+	Sender *struct {
+		HostIdentityURN string `json:"hostIdentityUrn"`
+		ParticipantType *struct {
+			Member *struct {
+				FirstName *gqlMessengerText `json:"firstName"`
+				LastName  *gqlMessengerText `json:"lastName"`
+			} `json:"member"`
+		} `json:"participantType"`
+	} `json:"sender"`
 }
 
-type voyagerConversationEvent struct {
+type gqlMessengerConversation struct {
 	EntityURN    string `json:"entityUrn"`
-	CreatedAt    int64  `json:"createdAt"`
-	DeliveredAt  int64  `json:"deliveredAt,omitempty"`
-	EventContent struct {
-		MessageEvent voyagerMessageEvent `json:"com.linkedin.voyager.messaging.event.MessageEvent"`
-	} `json:"eventContent"`
-	Actor struct {
-		MiniProfile voyagerMiniProfile `json:"com.linkedin.voyager.messaging.MessagingMember"`
-	} `json:"from"`
-}
-
-type voyagerConversation struct {
-	EntityURN      string `json:"entityUrn"`
-	Read           bool   `json:"read"`
-	Starred        bool   `json:"starred,omitempty"`
-	Archived       bool   `json:"archived,omitempty"`
-	LastActivityAt int64  `json:"lastActivityAt"`
-	Participants   []struct {
-		MiniProfile voyagerMiniProfile `json:"com.linkedin.voyager.messaging.MessagingMember"`
-	} `json:"participants"`
-	Events []voyagerConversationEvent `json:"events,omitempty"`
+	BackendURN   string `json:"backendUrn"`
+	UnreadCount  int    `json:"unreadCount"`
+	Read         bool   `json:"read"`
+	LastActivity int64  `json:"lastActivityAt"`
+	Participants []gqlMessengerParticipant `json:"conversationParticipants"`
+	Messages     *struct {
+		Elements []gqlMessengerMessage `json:"elements"`
+	} `json:"messages"`
 }
 
 // ListConversations returns a paged list of conversations.
 func (s *MessagingService) ListConversations(start, count int) (*models.PagedConversations, error) {
+	return s.listConversationsByCategory("INBOX", start, count)
+}
+
+// ListUnread returns only unread conversations.
+func (s *MessagingService) ListUnread(start, count int) (*models.PagedConversations, error) {
+	result, err := s.listConversationsByCategory("INBOX", start, count)
+	if err != nil {
+		return nil, err
+	}
+	// Filter to unread only (the API doesn't have a direct unread filter).
+	var unread []models.Conversation
+	for _, c := range result.Items {
+		if c.Unread {
+			unread = append(unread, c)
+		}
+	}
+	result.Items = unread
+	result.Pagination.Total = len(unread)
+	return result, nil
+}
+
+func (s *MessagingService) listConversationsByCategory(category string, start, count int) (*models.PagedConversations, error) {
 	if count == 0 {
 		count = client.DefaultCount
 	}
-	params := map[string]string{
-		"keyVersion": "LEGACY_INBOX",
-		"start":      fmt.Sprintf("%d", start),
-		"count":      fmt.Sprintf("%d", count),
+	profileURN, err := s.getProfileURN()
+	if err != nil {
+		return nil, err
 	}
+
+	path := fmt.Sprintf(
+		"%s?includeWebMetadata=true&variables=(category:%s,count:%d,start:%d,mailboxUrn:%s)&queryId=%s",
+		client.EndpointGraphQL, category, count, start,
+		url.QueryEscape(profileURN),
+		client.EndpointMessengerConversationsQueryID,
+	)
 
 	var raw struct {
-		Elements []voyagerConversation `json:"elements"`
-		Paging   struct {
-			Start int `json:"start"`
-			Count int `json:"count"`
-			Total int `json:"total"`
-		} `json:"paging"`
+		Data *struct {
+			Collection *struct {
+				Elements []gqlMessengerConversation `json:"elements"`
+				Paging   struct {
+					Start int `json:"start"`
+					Count int `json:"count"`
+					Total int `json:"total"`
+				} `json:"paging"`
+			} `json:"messengerConversationsByCategory"`
+		} `json:"data"`
 	}
 
-	if err := s.c.Get(client.EndpointConversations, params, &raw); err != nil {
+	if err := s.c.GetGraphQL(path, &raw); err != nil {
 		return nil, fmt.Errorf("list conversations: %w", err)
 	}
 
 	result := &models.PagedConversations{
-		Pagination: models.Pagination{
-			Start:   start,
-			Count:   count,
-			Total:   raw.Paging.Total,
-			HasMore: (start + count) < raw.Paging.Total,
-		},
+		Pagination: models.Pagination{Start: start, Count: count},
 	}
 
-	for _, vc := range raw.Elements {
-		result.Items = append(result.Items, mapVoyagerConversation(vc))
+	if raw.Data == nil || raw.Data.Collection == nil {
+		return result, nil
+	}
+
+	col := raw.Data.Collection
+	result.Pagination.Total = len(col.Elements)
+	result.Pagination.HasMore = len(col.Elements) >= count
+
+	for _, gc := range col.Elements {
+		conv := s.mapGraphQLConversation(gc, profileURN)
+		result.Items = append(result.Items, conv)
 	}
 
 	return result, nil
@@ -94,206 +171,180 @@ func (s *MessagingService) GetConversation(conversationID string, start, count i
 	if count == 0 {
 		count = client.DefaultCount
 	}
-	path := fmt.Sprintf(client.EndpointConversationEvents, conversationID)
-	params := map[string]string{
-		"start": fmt.Sprintf("%d", start),
-		"count": fmt.Sprintf("%d", count),
+	profileURN, err := s.getProfileURN()
+	if err != nil {
+		return nil, err
 	}
+
+	// Build the full conversation URN from the thread ID.
+	convURN := fmt.Sprintf("urn:li:msg_conversation:(%s,%s)", profileURN, conversationID)
+
+	path := fmt.Sprintf(
+		"%s?includeWebMetadata=true&variables=(conversationUrn:%s,count:%d)&queryId=%s",
+		client.EndpointGraphQL,
+		url.QueryEscape(convURN),
+		count,
+		client.EndpointMessengerMessagesQueryID,
+	)
 
 	var raw struct {
-		Elements []voyagerConversationEvent `json:"elements"`
-		Paging   struct {
-			Start int `json:"start"`
-			Count int `json:"count"`
-			Total int `json:"total"`
-		} `json:"paging"`
+		Data *struct {
+			Messages *struct {
+				Elements []gqlMessengerMessage `json:"elements"`
+				Paging   struct {
+					Start int `json:"start"`
+					Count int `json:"count"`
+					Total int `json:"total"`
+				} `json:"paging"`
+			} `json:"messengerMessagesByConversation"`
+		} `json:"data"`
 	}
 
-	if err := s.c.Get(path, params, &raw); err != nil {
+	if err := s.c.GetGraphQL(path, &raw); err != nil {
 		return nil, fmt.Errorf("get conversation %q: %w", conversationID, err)
 	}
 
 	result := &models.PagedMessages{
-		Pagination: models.Pagination{
-			Start:   start,
-			Count:   count,
-			Total:   raw.Paging.Total,
-			HasMore: (start + count) < raw.Paging.Total,
-		},
+		Pagination: models.Pagination{Start: start, Count: count},
 	}
 
-	for _, ve := range raw.Elements {
-		result.Items = append(result.Items, mapVoyagerEvent(ve))
+	if raw.Data == nil || raw.Data.Messages == nil {
+		return result, nil
 	}
 
-	return result, nil
-}
+	msgs := raw.Data.Messages
+	result.Pagination.Total = len(msgs.Elements)
+	result.Pagination.HasMore = len(msgs.Elements) >= count
 
-// ListUnread returns only unread conversations.
-func (s *MessagingService) ListUnread(start, count int) (*models.PagedConversations, error) {
-	if count == 0 {
-		count = client.DefaultCount
-	}
-	params := map[string]string{
-		"keyVersion": "LEGACY_INBOX",
-		"q":          "unread",
-		"start":      fmt.Sprintf("%d", start),
-		"count":      fmt.Sprintf("%d", count),
+	for _, gm := range msgs.Elements {
+		result.Items = append(result.Items, mapGraphQLMessage(gm))
 	}
 
-	var raw struct {
-		Elements []voyagerConversation `json:"elements"`
-		Paging   struct {
-			Start int `json:"start"`
-			Count int `json:"count"`
-			Total int `json:"total"`
-		} `json:"paging"`
-	}
-
-	if err := s.c.Get(client.EndpointConversations, params, &raw); err != nil {
-		return nil, fmt.Errorf("list unread: %w", err)
-	}
-
-	result := &models.PagedConversations{
-		Pagination: models.Pagination{
-			Start:   start,
-			Count:   count,
-			Total:   raw.Paging.Total,
-			HasMore: (start + count) < raw.Paging.Total,
-		},
-	}
-	for _, vc := range raw.Elements {
-		result.Items = append(result.Items, mapVoyagerConversation(vc))
-	}
 	return result, nil
 }
 
 // SendMessage sends a message to an existing conversation or starts a new one.
+// TODO: Needs migration to new messaging protocol (old REST endpoint is dead).
 func (s *MessagingService) SendMessage(input models.SendMessageInput) error {
-	payload := map[string]interface{}{
-		"eventCreate": map[string]interface{}{
-			"value": map[string]interface{}{
-				"com.linkedin.voyager.messaging.create.MessageCreate": map[string]interface{}{
-					"attributedBody": map[string]interface{}{
-						"text":       input.Body,
-						"attributes": []interface{}{},
-					},
-					"attachments": []interface{}{},
-				},
-			},
-		},
-	}
-
-	var path string
-	if input.ConversationURN != "" {
-		convID := urnToID(input.ConversationURN)
-		path = fmt.Sprintf(client.EndpointConversationEvents, convID)
-	} else {
-		recipients := make([]map[string]interface{}, 0, len(input.RecipientURNs))
-		for _, urn := range input.RecipientURNs {
-			recipients = append(recipients, map[string]interface{}{
-				"com.linkedin.voyager.messaging.MessagingMember": map[string]interface{}{
-					"miniProfile": map[string]interface{}{"entityUrn": urn},
-				},
-			})
-		}
-		payload["recipients"] = recipients
-		path = client.EndpointConversations
-	}
-
-	return s.c.Post(path, payload, nil)
+	return fmt.Errorf("send message is not yet supported (endpoint migration in progress)")
 }
 
 // MarkRead marks a conversation as read.
+// TODO: Needs migration to new messaging protocol.
 func (s *MessagingService) MarkRead(conversationID string) error {
-	path := fmt.Sprintf("%s/%s", client.EndpointConversations, conversationID)
-	return s.c.Put(path, map[string]interface{}{"read": true}, nil)
+	return fmt.Errorf("mark read is not yet supported (endpoint migration in progress)")
 }
 
 // StarConversation stars (bookmarks) a conversation.
 func (s *MessagingService) StarConversation(conversationID string) error {
-	path := fmt.Sprintf(client.EndpointConversationByID, conversationID)
-	return s.c.Put(path, map[string]interface{}{"starred": true}, nil)
+	return fmt.Errorf("star conversation is not yet supported (endpoint migration in progress)")
 }
 
 // UnstarConversation removes the star from a conversation.
 func (s *MessagingService) UnstarConversation(conversationID string) error {
-	path := fmt.Sprintf(client.EndpointConversationByID, conversationID)
-	return s.c.Put(path, map[string]interface{}{"starred": false}, nil)
+	return fmt.Errorf("unstar conversation is not yet supported (endpoint migration in progress)")
 }
 
 // ArchiveConversation archives a conversation.
 func (s *MessagingService) ArchiveConversation(conversationID string) error {
-	path := fmt.Sprintf(client.EndpointConversationByID, conversationID)
-	return s.c.Put(path, map[string]interface{}{"archived": true}, nil)
+	return fmt.Errorf("archive conversation is not yet supported (endpoint migration in progress)")
 }
 
 // UnarchiveConversation restores an archived conversation.
 func (s *MessagingService) UnarchiveConversation(conversationID string) error {
-	path := fmt.Sprintf(client.EndpointConversationByID, conversationID)
-	return s.c.Put(path, map[string]interface{}{"archived": false}, nil)
+	return fmt.Errorf("unarchive conversation is not yet supported (endpoint migration in progress)")
 }
 
 // DeleteMessage deletes a specific message from a conversation.
 func (s *MessagingService) DeleteMessage(conversationID, messageURN string) error {
-	path := fmt.Sprintf(client.EndpointMessageEventByID, conversationID, urnToID(messageURN))
-	return s.c.Delete(path)
+	return fmt.Errorf("delete message is not yet supported (endpoint migration in progress)")
 }
 
 // DeleteConversation deletes an entire conversation.
 func (s *MessagingService) DeleteConversation(conversationID string) error {
-	path := fmt.Sprintf(client.EndpointConversationByID, conversationID)
-	return s.c.Delete(path)
+	return fmt.Errorf("delete conversation is not yet supported (endpoint migration in progress)")
 }
 
-// mapVoyagerConversation converts a raw conversation to models.Conversation.
-func mapVoyagerConversation(vc voyagerConversation) models.Conversation {
+// mapGraphQLConversation converts a GraphQL conversation to models.Conversation.
+func (s *MessagingService) mapGraphQLConversation(gc gqlMessengerConversation, myURN string) models.Conversation {
 	conv := models.Conversation{
-		URN:       vc.EntityURN,
-		ID:        urnToID(vc.EntityURN),
-		Unread:    !vc.Read,
-		Starred:   vc.Starred,
-		Archived:  vc.Archived,
-		UpdatedAt: msToTime(vc.LastActivityAt),
+		URN:       gc.EntityURN,
+		ID:        extractThreadID(gc.BackendURN),
+		Unread:    gc.UnreadCount > 0,
+		UpdatedAt: msToTime(gc.LastActivity),
 	}
-	for _, p := range vc.Participants {
-		mp := p.MiniProfile
-		if mp.EntityURN == "" {
-			continue
+
+	for _, p := range gc.Participants {
+		if p.HostIdentityURN == myURN {
+			continue // skip self
 		}
-		conv.Participants = append(conv.Participants, models.Profile{
-			URN:       mp.EntityURN,
-			ProfileID: mp.PublicID,
-			FirstName: mp.FirstName,
-			LastName:  mp.LastName,
-			Headline:  mp.Occupation,
-		})
+		profile := models.Profile{URN: p.HostIdentityURN}
+		if p.ParticipantType != nil && p.ParticipantType.Member != nil {
+			m := p.ParticipantType.Member
+			if m.FirstName != nil {
+				profile.FirstName = m.FirstName.Text
+			}
+			if m.LastName != nil {
+				profile.LastName = m.LastName.Text
+			}
+		}
+		conv.Participants = append(conv.Participants, profile)
 	}
-	if len(vc.Events) > 0 {
-		msg := mapVoyagerEvent(vc.Events[0])
+
+	if gc.Messages != nil && len(gc.Messages.Elements) > 0 {
+		msg := mapGraphQLMessage(gc.Messages.Elements[0])
 		conv.LastMessage = &msg
 	}
+
 	return conv
 }
 
-// mapVoyagerEvent converts a raw conversation event to models.Message.
-func mapVoyagerEvent(ve voyagerConversationEvent) models.Message {
-	m := models.Message{
-		URN:    ve.EntityURN,
-		Body:   ve.EventContent.MessageEvent.AttributedBody.Text,
-		SentAt: msToTime(ve.CreatedAt),
+// mapGraphQLMessage converts a GraphQL message to models.Message.
+func mapGraphQLMessage(gm gqlMessengerMessage) models.Message {
+	msg := models.Message{
+		URN:    gm.EntityURN,
+		SentAt: msToTime(gm.DeliveredAt),
 	}
-	if ve.DeliveredAt > 0 {
-		m.DeliveredAt = msToTime(ve.DeliveredAt)
+	if gm.Body != nil {
+		msg.Body = gm.Body.Text
 	}
-	mp := ve.Actor.MiniProfile
-	m.SenderProfile = models.Profile{
-		URN:       mp.EntityURN,
-		ProfileID: mp.PublicID,
-		FirstName: mp.FirstName,
-		LastName:  mp.LastName,
+	if gm.Sender != nil {
+		msg.SenderProfile.URN = gm.Sender.HostIdentityURN
+		if gm.Sender.ParticipantType != nil && gm.Sender.ParticipantType.Member != nil {
+			m := gm.Sender.ParticipantType.Member
+			if m.FirstName != nil {
+				msg.SenderProfile.FirstName = m.FirstName.Text
+			}
+			if m.LastName != nil {
+				msg.SenderProfile.LastName = m.LastName.Text
+			}
+		}
 	}
-	return m
+	return msg
+}
+
+// extractThreadID extracts the thread ID from a backendUrn like
+// "urn:li:messagingThread:2-XXXXX"
+func extractThreadID(backendURN string) string {
+	parts := splitURN(backendURN)
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return backendURN
+}
+
+func splitURN(urn string) []string {
+	// Split "urn:li:messagingThread:2-XXX" into parts by ":"
+	result := make([]string, 0, 4)
+	start := 0
+	for i, ch := range urn {
+		if ch == ':' {
+			result = append(result, urn[start:i])
+			start = i + 1
+		}
+	}
+	result = append(result, urn[start:])
+	return result
 }
 
 // msToTime converts a millisecond timestamp to an RFC3339 string.

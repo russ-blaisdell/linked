@@ -98,14 +98,54 @@ func (s *ProfileService) GetMe() (*models.Profile, error) {
 	return extractProfileFromEnvelope(raw)
 }
 
-// GetProfile returns a profile by public profile ID (e.g. "john-doe").
+// GetProfile returns a profile by public identifier (e.g. "john-doe") or
+// encoded member ID (e.g. "ACoAABJqo7MBm..."). Uses the dash profiles
+// endpoint since the legacy /identity/profiles endpoint returns 410.
 func (s *ProfileService) GetProfile(profileID string) (*models.Profile, error) {
-	path := fmt.Sprintf("%s/%s", client.EndpointProfiles, profileID)
-	var raw voyagerNormalizedEnvelope
-	if err := s.c.Get(path, nil, &raw); err != nil {
+	params := map[string]string{
+		"q":              "memberIdentity",
+		"memberIdentity": profileID,
+	}
+	var raw struct {
+		Data struct {
+			Elements []string `json:"*elements"`
+		} `json:"data"`
+		Included []json.RawMessage `json:"included"`
+	}
+	if err := s.c.Get(client.EndpointDashProfiles, params, &raw); err != nil {
 		return nil, fmt.Errorf("get profile %q: %w", profileID, err)
 	}
-	return extractProfileFromEnvelope(raw)
+	if len(raw.Data.Elements) == 0 {
+		return nil, fmt.Errorf("profile not found: %s", profileID)
+	}
+
+	// Extract profile from the included entities.
+	for _, inc := range raw.Included {
+		var p struct {
+			EntityURN        string `json:"entityUrn"`
+			FirstName        string `json:"firstName"`
+			LastName         string `json:"lastName"`
+			Headline         string `json:"headline"`
+			Summary          string `json:"summary"`
+			PublicIdentifier string `json:"publicIdentifier"`
+			GeoLocationName  string `json:"geoLocationName"`
+			IndustryName     string `json:"industryName"`
+		}
+		if json.Unmarshal(inc, &p) != nil || p.FirstName == "" {
+			continue
+		}
+		return &models.Profile{
+			URN:       p.EntityURN,
+			ProfileID: p.PublicIdentifier,
+			FirstName: p.FirstName,
+			LastName:  p.LastName,
+			Headline:  p.Headline,
+			Summary:   p.Summary,
+			Location:  p.GeoLocationName,
+			Industry:  p.IndustryName,
+		}, nil
+	}
+	return nil, fmt.Errorf("profile data not found for: %s", profileID)
 }
 
 // GetContactInfo returns contact information for a profile.

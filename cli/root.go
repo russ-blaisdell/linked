@@ -62,6 +62,7 @@ func init() {
 		newPostsCmd(),
 		newRecommendationsCmd(),
 		newNotificationsCmd(),
+		newRawCmd(),
 	)
 }
 

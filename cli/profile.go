@@ -40,13 +40,13 @@ func newProfileCmd() *cobra.Command {
 // ---- Get ----
 
 func newProfileGetCmd() *cobra.Command {
-	var profileID string
 	cmd := &cobra.Command{
-		Use:   "get",
+		Use:   "get [profile-id]",
 		Short: "Get a LinkedIn profile (own or another member's)",
 		Example: `  linked profile get
-  linked profile get --urn john-doe
+  linked profile get john-doe
   linked profile get -o json`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newPrinter()
 			if err != nil {
@@ -58,10 +58,10 @@ func newProfileGetCmd() *cobra.Command {
 			}
 
 			var profile *models.Profile
-			if profileID == "" {
+			if len(args) == 0 {
 				profile, err = li.Profile.GetMe()
 			} else {
-				profile, err = li.Profile.GetProfile(profileID)
+				profile, err = li.Profile.GetProfile(args[0])
 			}
 			if err != nil {
 				return err
@@ -74,7 +74,6 @@ func newProfileGetCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&profileID, "urn", "", "Public profile ID of the member to fetch (omit for your own)")
 	return cmd
 }
 

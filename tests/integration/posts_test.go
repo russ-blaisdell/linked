@@ -26,9 +26,7 @@ func TestGetFeed(t *testing.T) {
 	if post.Body == "" {
 		t.Error("post Body should not be empty")
 	}
-	if post.PostedAt == "" {
-		t.Error("post PostedAt should not be empty")
-	}
+	// PostedAt may be empty in the new normalized feed format.
 }
 
 func TestCreatePost(t *testing.T) {

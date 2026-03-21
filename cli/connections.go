@@ -126,6 +126,12 @@ func newConnectionsPendingCmd() *cobra.Command {
 			p.Header(fmt.Sprintf("Pending Invitations (%d)", result.Pagination.Total))
 			for _, inv := range result.Items {
 				p.Printf("  From: %s %s  (%s)\n", inv.FromProfile.FirstName, inv.FromProfile.LastName, inv.SentAt)
+				if inv.FromProfile.Headline != "" {
+					p.Printf("    %s\n", inv.FromProfile.Headline)
+				}
+				if inv.Insight != "" {
+					p.Printf("    %s\n", inv.Insight)
+				}
 				if inv.Message != "" {
 					p.Printf("    \"%s\"\n", inv.Message)
 				}

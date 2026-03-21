@@ -174,6 +174,7 @@ type Invitation struct {
 	FromProfile Profile `json:"fromProfile,omitempty"`
 	ToProfile   Profile `json:"toProfile,omitempty"`
 	Message     string  `json:"message,omitempty"`
+	Insight     string  `json:"insight,omitempty"` // e.g. "1 mutual connection"
 	SentAt      string  `json:"sentAt"`
 	Status      string  `json:"status"`    // PENDING, ACCEPTED, IGNORED
 	Direction   string  `json:"direction"` // INBOUND, OUTBOUND
@@ -412,12 +413,23 @@ type PagedMutualConnections struct {
 	Pagination Pagination         `json:"pagination"`
 }
 
+// BrowserFingerprint holds browser identity headers extracted from a HAR file.
+// When present, these override the hardcoded defaults in the HTTP client.
+type BrowserFingerprint struct {
+	UserAgent       string `json:"userAgent,omitempty"`
+	SecChUA         string `json:"secChUa,omitempty"`
+	SecChUAMobile   string `json:"secChUaMobile,omitempty"`
+	SecChUAPlatform string `json:"secChUaPlatform,omitempty"`
+	XLiTrack        string `json:"xLiTrack,omitempty"`
+}
+
 // Credentials holds the stored LinkedIn session tokens.
 type Credentials struct {
-	LiAt       string `json:"li_at"`
-	JSESSIONID string `json:"jsessionid"`
-	Bcookie    string `json:"bcookie,omitempty"`
-	Bscookie   string `json:"bscookie,omitempty"`
-	ProfileID  string `json:"profileId,omitempty"`
-	CreatedAt  string `json:"createdAt"`
+	LiAt        string              `json:"li_at"`
+	JSESSIONID  string              `json:"jsessionid"`
+	Bcookie     string              `json:"bcookie,omitempty"`
+	Bscookie    string              `json:"bscookie,omitempty"`
+	ProfileID   string              `json:"profileId,omitempty"`
+	CreatedAt   string              `json:"createdAt"`
+	Fingerprint *BrowserFingerprint `json:"fingerprint,omitempty"`
 }

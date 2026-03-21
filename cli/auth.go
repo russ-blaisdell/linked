@@ -10,6 +10,7 @@ import (
 
 	"github.com/russ-blaisdell/linked/internal/client"
 	"github.com/russ-blaisdell/linked/internal/config"
+	"github.com/russ-blaisdell/linked/internal/harparser"
 	"github.com/russ-blaisdell/linked/internal/models"
 	"github.com/russ-blaisdell/linked/internal/output"
 )
@@ -29,24 +30,36 @@ func newAuthCmd() *cobra.Command {
 }
 
 func newAuthSetupCmd() *cobra.Command {
-	return &cobra.Command{
+	var harPath string
+
+	cmd := &cobra.Command{
 		Use:   "setup",
 		Short: "Configure LinkedIn session credentials",
 		Long: `Store your LinkedIn session cookies for linked to use.
 
-You need four cookies from your browser (Chrome / Firefox / Safari):
+Option 1 — Import from a HAR file (recommended):
+  linked auth setup --har ~/Downloads/www.linkedin.com.har
 
-  1. li_at       — your main LinkedIn session token
-  2. JSESSIONID  — used for CSRF validation (e.g. "ajax:1234567890abcdef")
-  3. bcookie     — browser fingerprint (e.g. "v=2&xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
-  4. bscookie    — secure browser fingerprint (e.g. "v=1&timestamp&uuid&token")
+  The HAR file provides browser fingerprint data (User-Agent, etc.) that
+  prevents session revocation. If the HAR doesn't contain cookies, you
+  will be prompted for them.
 
-How to get them:
-  1. Open LinkedIn in your browser and log in.
-  2. Open DevTools → Application → Cookies → https://www.linkedin.com
-  3. Copy the values for 'li_at', 'JSESSIONID', 'bcookie', and 'bscookie'.
+  How to capture a HAR file:
+    1. Open LinkedIn in Chrome and log in.
+    2. Open DevTools → Network tab.
+    3. Browse a few pages on LinkedIn.
+    4. Right-click in the Network tab → "Save all as HAR with content".
 
-These are stored at:
+Option 2 — Enter cookies manually:
+  linked auth setup
+
+  You need four cookies from DevTools → Application → Cookies:
+    1. li_at       — your main LinkedIn session token
+    2. JSESSIONID  — used for CSRF validation (e.g. "ajax:1234567890abcdef")
+    3. bcookie     — browser fingerprint (e.g. "v=2&xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+    4. bscookie    — secure browser fingerprint (e.g. "v=1&timestamp&uuid&token")
+
+Credentials are stored at:
   ~/.openclaw/credentials/linkedin/<profile>/creds.json  (mode 0600)
 `,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -55,44 +68,39 @@ These are stored at:
 				return err
 			}
 
-			reader := bufio.NewReader(os.Stdin)
+			var creds *models.Credentials
 
-			p.Header("LinkedIn Credentials Setup")
-			fmt.Println()
+			if harPath != "" {
+				result, err := harparser.Parse(harPath)
+				if err != nil {
+					return fmt.Errorf("parsing HAR file: %w", err)
+				}
 
-			fmt.Print("  li_at value: ")
-			liAt, _ := reader.ReadString('\n')
-			liAt = strings.TrimSpace(liAt)
-			if liAt == "" {
-				return fmt.Errorf("li_at is required")
-			}
-
-			fmt.Print("  JSESSIONID value: ")
-			jsessionid, _ := reader.ReadString('\n')
-			jsessionid = strings.TrimSpace(jsessionid)
-			if jsessionid == "" {
-				return fmt.Errorf("JSESSIONID is required")
-			}
-
-			fmt.Print("  bcookie value: ")
-			bcookie, _ := reader.ReadString('\n')
-			bcookie = strings.TrimSpace(bcookie)
-			if bcookie == "" {
-				return fmt.Errorf("bcookie is required")
-			}
-
-			fmt.Print("  bscookie value: ")
-			bscookie, _ := reader.ReadString('\n')
-			bscookie = strings.TrimSpace(bscookie)
-			if bscookie == "" {
-				return fmt.Errorf("bscookie is required")
-			}
-
-			creds := &models.Credentials{
-				LiAt:       liAt,
-				JSESSIONID: jsessionid,
-				Bcookie:    bcookie,
-				Bscookie:   bscookie,
+				if result.HasCookies {
+					creds = &models.Credentials{
+						LiAt:       result.LiAt,
+						JSESSIONID: result.JSESSIONID,
+						Bcookie:    result.Bcookie,
+						Bscookie:   result.Bscookie,
+					}
+					p.Success("Extracted cookies from HAR file")
+				} else {
+					p.Warn("HAR file does not contain cookies — prompting manually")
+					fmt.Println()
+					creds, err = promptForCookies()
+					if err != nil {
+						return err
+					}
+				}
+				creds.Fingerprint = result.Fingerprint
+				p.Success(fmt.Sprintf("Extracted browser fingerprint: %s", result.Fingerprint.UserAgent))
+			} else {
+				p.Header("LinkedIn Credentials Setup")
+				fmt.Println()
+				creds, err = promptForCookies()
+				if err != nil {
+					return err
+				}
 			}
 
 			// Verify before saving.
@@ -120,6 +128,48 @@ These are stored at:
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVar(&harPath, "har", "", "path to a HAR file captured from linkedin.com")
+	return cmd
+}
+
+func promptForCookies() (*models.Credentials, error) {
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Print("  li_at value: ")
+	liAt, _ := reader.ReadString('\n')
+	liAt = strings.TrimSpace(liAt)
+	if liAt == "" {
+		return nil, fmt.Errorf("li_at is required")
+	}
+
+	fmt.Print("  JSESSIONID value: ")
+	jsessionid, _ := reader.ReadString('\n')
+	jsessionid = strings.TrimSpace(jsessionid)
+	if jsessionid == "" {
+		return nil, fmt.Errorf("JSESSIONID is required")
+	}
+
+	fmt.Print("  bcookie value: ")
+	bcookie, _ := reader.ReadString('\n')
+	bcookie = strings.TrimSpace(bcookie)
+	if bcookie == "" {
+		return nil, fmt.Errorf("bcookie is required")
+	}
+
+	fmt.Print("  bscookie value: ")
+	bscookie, _ := reader.ReadString('\n')
+	bscookie = strings.TrimSpace(bscookie)
+	if bscookie == "" {
+		return nil, fmt.Errorf("bscookie is required")
+	}
+
+	return &models.Credentials{
+		LiAt:       liAt,
+		JSESSIONID: jsessionid,
+		Bcookie:    bcookie,
+		Bscookie:   bscookie,
+	}, nil
 }
 
 func newAuthWhoamiCmd() *cobra.Command {

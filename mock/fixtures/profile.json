@@ -3,6 +3,7 @@
   "included": [
     {
       "entityUrn": "urn:li:member:123456789",
+      "dashEntityUrn": "urn:li:fsd_profile:test-user-encoded-id",
       "publicIdentifier": "jane-doe",
       "miniProfile": {
         "entityUrn": "urn:li:member:123456789",

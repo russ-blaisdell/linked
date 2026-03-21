@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,70 +22,164 @@ func NewPostsService(c *client.Client) *PostsService {
 }
 
 // GetFeed returns the authenticated user's home feed.
+// The response uses a normalized format: data.*elements contains URNs that
+// reference UpdateV2 entities in the included array, with actor profiles and
+// social counts in separate included entities.
 func (s *PostsService) GetFeed(start, count int) (*models.PagedPosts, error) {
 	if count == 0 {
 		count = client.DefaultCount
 	}
 	params := map[string]string{
-		"q":     "chronologicalFeed",
+		"q":     "feed",
 		"start": fmt.Sprintf("%d", start),
 		"count": fmt.Sprintf("%d", count),
 	}
 
 	var raw struct {
-		Elements []struct {
-			Value struct {
-				EntityURN  string `json:"entityUrn"`
-				Commentary struct {
-					Text struct {
-						Text string `json:"text"`
-					} `json:"text"`
-				} `json:"commentary,omitempty"`
-				SocialDetail struct {
-					LikeCount    int `json:"likeCount"`
-					CommentCount int `json:"commentCount"`
-					ShareCount   int `json:"shareCount"`
-				} `json:"socialDetail,omitempty"`
-				CreatedAt int64 `json:"createdAt"`
-				Actor     struct {
-					Urn  string `json:"urn"`
-					Name struct {
-						Text string `json:"text"`
-					} `json:"name,omitempty"`
-				} `json:"actor,omitempty"`
-			} `json:"com.linkedin.voyager.feed.render.UpdateV2"`
-		} `json:"elements"`
-		Paging struct {
-			Start int `json:"start"`
-			Count int `json:"count"`
-			Total int `json:"total"`
-		} `json:"paging"`
+		Data struct {
+			Paging struct {
+				Start int `json:"start"`
+				Count int `json:"count"`
+			} `json:"paging"`
+			Elements []string `json:"*elements"`
+		} `json:"data"`
+		Included []json.RawMessage `json:"included"`
 	}
 
 	if err := s.c.Get(client.EndpointFeed, params, &raw); err != nil {
 		return nil, fmt.Errorf("get feed: %w", err)
 	}
 
+	type feedTextWithAttrs struct {
+		Text       string `json:"text"`
+		Attributes []struct {
+			MiniProfile string `json:"*miniProfile"`
+		} `json:"attributes"`
+	}
+
+	// Index included entities by URN.
+	type includedEntity struct {
+		raw       json.RawMessage
+		entityURN string
+		typ       string
+	}
+	byURN := make(map[string]json.RawMessage)
+	for _, inc := range raw.Included {
+		var peek struct {
+			EntityURN string `json:"entityUrn"`
+		}
+		if json.Unmarshal(inc, &peek) == nil && peek.EntityURN != "" {
+			byURN[peek.EntityURN] = inc
+		}
+	}
+
 	result := &models.PagedPosts{
 		Pagination: models.Pagination{
 			Start:   start,
 			Count:   count,
-			Total:   raw.Paging.Total,
-			HasMore: (start + count) < raw.Paging.Total,
+			Total:   len(raw.Data.Elements),
+			HasMore: len(raw.Data.Elements) >= count,
 		},
 	}
-	for _, el := range raw.Elements {
-		v := el.Value
-		if v.EntityURN == "" {
+
+	for _, urn := range raw.Data.Elements {
+		updateRaw, ok := byURN[urn]
+		if !ok {
 			continue
 		}
+		var update struct {
+			EntityURN      string `json:"entityUrn"`
+			UpdateMetadata *struct {
+				URN string `json:"urn"` // activity URN
+			} `json:"updateMetadata"`
+			Header *struct {
+				Text *feedTextWithAttrs `json:"text"`
+			} `json:"header"`
+			Actor *struct {
+				Name *feedTextWithAttrs `json:"name"`
+			} `json:"actor"`
+			Commentary *struct {
+				Text *struct {
+					Text string `json:"text"`
+				} `json:"text"`
+			} `json:"commentary"`
+			SocialDetail string `json:"*socialDetail"` // URN reference
+		}
+		if json.Unmarshal(updateRaw, &update) != nil {
+			continue
+		}
+
+		activityURN := ""
+		if update.UpdateMetadata != nil {
+			activityURN = update.UpdateMetadata.URN
+		}
+
+		// Resolve actor. Check header (reshares) then actor.name (original posts).
+		authorProfile := models.Profile{}
+		mpURN := ""
+		if update.Header != nil && update.Header.Text != nil {
+			for _, attr := range update.Header.Text.Attributes {
+				if attr.MiniProfile != "" {
+					mpURN = attr.MiniProfile
+					break
+				}
+			}
+		}
+		if mpURN == "" && update.Actor != nil && update.Actor.Name != nil {
+			for _, attr := range update.Actor.Name.Attributes {
+				if attr.MiniProfile != "" {
+					mpURN = attr.MiniProfile
+					break
+				}
+			}
+		}
+		if mpURN != "" {
+			if mpRaw, ok := byURN[mpURN]; ok {
+				var mp voyagerMiniProfile
+				if json.Unmarshal(mpRaw, &mp) == nil {
+					authorProfile = models.Profile{
+						URN:       mp.EntityURN,
+						ProfileID: mp.PublicID,
+						FirstName: mp.FirstName,
+						LastName:  mp.LastName,
+						Headline:  mp.Occupation,
+					}
+				}
+			}
+		}
+		if authorProfile.FirstName == "" && update.Header != nil && update.Header.Text != nil {
+			authorProfile.FirstName = update.Header.Text.Text
+		}
+
+		body := ""
+		if update.Commentary != nil && update.Commentary.Text != nil {
+			body = update.Commentary.Text.Text
+		}
+
+		// Resolve social counts from SocialActivityCounts included entity.
+		var likes, comments, shares int
+		if activityURN != "" {
+			countsURN := "urn:li:fs_socialActivityCounts:" + activityURN
+			if countsRaw, ok := byURN[countsURN]; ok {
+				var counts struct {
+					NumLikes    int `json:"numLikes"`
+					NumComments int `json:"numComments"`
+					NumShares   int `json:"numShares"`
+				}
+				json.Unmarshal(countsRaw, &counts)
+				likes = counts.NumLikes
+				comments = counts.NumComments
+				shares = counts.NumShares
+			}
+		}
+
 		result.Items = append(result.Items, models.Post{
-			URN:          v.EntityURN,
-			Body:         v.Commentary.Text.Text,
-			LikeCount:    v.SocialDetail.LikeCount,
-			CommentCount: v.SocialDetail.CommentCount,
-			ShareCount:   v.SocialDetail.ShareCount,
-			PostedAt:     msToTime(v.CreatedAt),
+			URN:           activityURN,
+			Body:          body,
+			AuthorProfile: authorProfile,
+			LikeCount:     likes,
+			CommentCount:  comments,
+			ShareCount:    shares,
 		})
 	}
 	return result, nil

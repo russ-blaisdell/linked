@@ -114,6 +114,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Connections
 	mux.HandleFunc("/voyager/api/relationships/connections", s.handleConnections)
+	mux.HandleFunc("/voyager/api/relationships/dash/connections", s.handleDashConnections)
+
+	// Profiles (dash)
+	mux.HandleFunc("/voyager/api/identity/dash/profiles", s.handleDashProfiles)
 	mux.HandleFunc("/voyager/api/relationships/invitationViews", s.handleInvitations)
 	mux.HandleFunc("/voyager/api/relationships/sentInvitationViewsV2", s.handleSentInvitations)
 	mux.HandleFunc("/voyager/api/relationships/invitations/", s.handleInvitationAction)
@@ -136,6 +140,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/voyager/api/feed/updatesV2", s.handleFeed)
 	mux.HandleFunc("/voyager/api/feed/notifications/", s.handleNotificationByID)
 	mux.HandleFunc("/voyager/api/feed/notifications", s.handleNotifications)
+	mux.HandleFunc("/voyager/api/voyagerIdentityDashNotificationCards", s.handleDashNotificationCards)
+	mux.HandleFunc("/voyager/api/voyagerNotificationsDashBadgingItemCounts", s.handleDashBadgingCounts)
 	mux.HandleFunc("/voyager/api/ugcPosts", s.handleUGCPosts)
 	mux.HandleFunc("/voyager/api/socialActions/", s.handleSocialActions)
 
@@ -313,6 +319,65 @@ func (s *Server) handleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) handleDashConnections(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, map[string]interface{}{
+		"data": map[string]interface{}{
+			"*elements": []interface{}{
+				"urn:li:fsd_connection:test-member-id-001",
+				"urn:li:fsd_connection:test-member-id-002",
+			},
+			"paging": map[string]interface{}{"start": 0, "count": 20},
+		},
+		"included": []interface{}{
+			map[string]interface{}{
+				"entityUrn":       "urn:li:fsd_connection:test-member-id-001",
+				"$type":           "com.linkedin.voyager.dash.relationships.Connection",
+				"connectedMember": "urn:li:fsd_profile:test-member-id-001",
+				"createdAt":       1741305600000,
+			},
+			map[string]interface{}{
+				"entityUrn":       "urn:li:fsd_connection:test-member-id-002",
+				"$type":           "com.linkedin.voyager.dash.relationships.Connection",
+				"connectedMember": "urn:li:fsd_profile:test-member-id-002",
+				"createdAt":       1741305600000,
+			},
+		},
+	})
+}
+
+func (s *Server) handleDashProfiles(w http.ResponseWriter, r *http.Request) {
+	memberID := r.URL.Query().Get("memberIdentity")
+	// Return a mock profile for any memberIdentity
+	firstName := "Jane"
+	lastName := "Doe"
+	headline := "Engineering Manager"
+	publicID := "jane-doe"
+	if memberID == "test-member-id-001" {
+		firstName = "Test"
+		lastName = "Connection"
+		headline = "Software Engineer"
+		publicID = "test-connection"
+	}
+	writeJSON(w, map[string]interface{}{
+		"data": map[string]interface{}{
+			"*elements": []interface{}{
+				"urn:li:fsd_profile:" + memberID,
+			},
+			"paging": map[string]interface{}{"start": 0, "count": 10},
+		},
+		"included": []interface{}{
+			map[string]interface{}{
+				"entityUrn":        "urn:li:fsd_profile:" + memberID,
+				"firstName":        firstName,
+				"lastName":         lastName,
+				"headline":         headline,
+				"publicIdentifier": publicID,
+				"$type":            "com.linkedin.voyager.dash.identity.profile.Profile",
+			},
+		},
+	})
+}
+
 func (s *Server) handleInvitations(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{
 		"elements": []interface{}{
@@ -418,17 +483,22 @@ func (s *Server) handleAppliedJobs(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCompanies(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{
-		"elements": []interface{}{
+		"data": map[string]interface{}{
+			"*elements": []interface{}{"urn:li:fs_normalized_company:9999"},
+			"paging":    map[string]interface{}{"start": 0, "count": 10},
+		},
+		"included": []interface{}{
 			map[string]interface{}{
-				"entityUrn":     "urn:li:company:9999",
+				"entityUrn":     "urn:li:fs_normalized_company:9999",
 				"universalName": "anthropic",
 				"name":          "Anthropic",
 				"tagline":       "AI safety company",
 				"description":   "Anthropic is an AI safety company.",
-				"industry":      map[string]interface{}{"localizedName": "Software Development"},
-				"websiteUrl":    "https://anthropic.com",
-				"staffCount":    float64(500),
+				"industries":    []interface{}{"Software Development"},
+				"companyPageUrl": "https://anthropic.com",
+				"staffCount":    500,
 				"headquarter":   map[string]interface{}{"city": "San Francisco", "country": "US"},
+				"$type":         "com.linkedin.voyager.organization.Company",
 			},
 		},
 	})
@@ -436,25 +506,50 @@ func (s *Server) handleCompanies(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleFeed(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{
-		"elements": []interface{}{
+		"data": map[string]interface{}{
+			"*elements": []interface{}{
+				"urn:li:fs_updateV2:(urn:li:activity:aaa001,MAIN_FEED,EMPTY,DEFAULT,false)",
+			},
+			"paging": map[string]interface{}{"start": 0, "count": 20},
+		},
+		"included": []interface{}{
 			map[string]interface{}{
-				"com.linkedin.voyager.feed.render.UpdateV2": map[string]interface{}{
-					"entityUrn": "urn:li:activity:aaa001",
-					"commentary": map[string]interface{}{
-						"text": map[string]interface{}{"text": "Excited to announce our new product launch!"},
-					},
-					"socialDetail": map[string]interface{}{
-						"likeCount": 42, "commentCount": 7, "shareCount": 3,
-					},
-					"createdAt": 1741305600000,
-					"actor": map[string]interface{}{
-						"urn":  "urn:li:member:123456789",
-						"name": map[string]interface{}{"text": "Jane Doe"},
+				"entityUrn": "urn:li:fs_updateV2:(urn:li:activity:aaa001,MAIN_FEED,EMPTY,DEFAULT,false)",
+				"$type":     "com.linkedin.voyager.feed.render.UpdateV2",
+				"updateMetadata": map[string]interface{}{
+					"urn": "urn:li:activity:aaa001",
+				},
+				"header": map[string]interface{}{
+					"text": map[string]interface{}{
+						"text": "Jane Doe",
+						"attributes": []interface{}{
+							map[string]interface{}{
+								"*miniProfile": "urn:li:fs_miniProfile:jane-doe-id",
+							},
+						},
 					},
 				},
+				"commentary": map[string]interface{}{
+					"text": map[string]interface{}{"text": "Excited to announce our new product launch!"},
+				},
+				"*socialDetail": "urn:li:fs_socialDetail:urn:li:activity:aaa001",
+			},
+			map[string]interface{}{
+				"entityUrn": "urn:li:fs_miniProfile:jane-doe-id",
+				"$type":     "com.linkedin.voyager.identity.shared.MiniProfile",
+				"firstName": "Jane",
+				"lastName":  "Doe",
+				"occupation": "Product Manager",
+				"publicIdentifier": "jane-doe",
+			},
+			map[string]interface{}{
+				"entityUrn":   "urn:li:fs_socialActivityCounts:urn:li:activity:aaa001",
+				"$type":       "com.linkedin.voyager.feed.shared.SocialActivityCounts",
+				"numLikes":    42,
+				"numComments": 7,
+				"numShares":   3,
 			},
 		},
-		"paging": map[string]interface{}{"start": 0, "count": 20, "total": 1},
 	})
 }
 
@@ -565,6 +660,44 @@ func (s *Server) handleNotificationByID(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusCreated)
 }
 
+func (s *Server) handleDashNotificationCards(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, map[string]interface{}{
+		"data": map[string]interface{}{
+			"*elements": []interface{}{
+				"urn:li:fsd_notificationCard:notif001",
+				"urn:li:fsd_notificationCard:notif002",
+			},
+			"paging": map[string]interface{}{"start": 0, "count": 10},
+		},
+		"included": []interface{}{
+			map[string]interface{}{
+				"entityUrn":   "urn:li:fsd_notificationCard:notif001",
+				"headline":    map[string]interface{}{"text": "John Smith liked your post"},
+				"read":        false,
+				"publishedAt": 1741305600000,
+			},
+			map[string]interface{}{
+				"entityUrn":   "urn:li:fsd_notificationCard:notif002",
+				"headline":    map[string]interface{}{"text": "You appeared in 5 searches this week"},
+				"read":        true,
+				"publishedAt": 1741219200000,
+			},
+		},
+	})
+}
+
+func (s *Server) handleDashBadgingCounts(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, map[string]interface{}{
+		"data": map[string]interface{}{
+			"elements": []interface{}{
+				map[string]interface{}{"badgingItem": "NOTIFICATIONS", "count": 3},
+				map[string]interface{}{"badgingItem": "MESSAGING", "count": 1},
+				map[string]interface{}{"badgingItem": "MY_NETWORK", "count": 0},
+			},
+		},
+	})
+}
+
 // handleGraphQL routes GraphQL requests by queryId parameter.
 func (s *Server) handleGraphQL(w http.ResponseWriter, r *http.Request) {
 	queryID := r.URL.Query().Get("queryId")
@@ -573,7 +706,219 @@ func (s *Server) handleGraphQL(w http.ResponseWriter, r *http.Request) {
 		writeFixture(w, "who-viewed-count.json")
 	case strings.HasPrefix(queryID, "voyagerPremiumDashAnalyticsObject."):
 		writeFixture(w, "who-viewed.json")
+	case strings.HasPrefix(queryID, "voyagerRelationshipsDashInvitationViews."):
+		writeFixture(w, "invitation-views.json")
+	case strings.HasPrefix(queryID, "voyagerRelationshipsDashSentInvitationViews."):
+		writeFixture(w, "sent-invitation-views.json")
+	case strings.HasPrefix(queryID, "voyagerRelationshipsDashInvitationsSummary."):
+		writeJSON(w, map[string]interface{}{
+			"data": map[string]interface{}{
+				"relationshipsDashInvitationsSummaryByInvitationSummaryTypes": map[string]interface{}{
+					"elements": []interface{}{
+						map[string]interface{}{"numPendingInvitations": 1, "numNewInvitations": 0},
+					},
+				},
+			},
+		})
+	case strings.HasPrefix(queryID, "voyagerMessagingDashMessengerConversations."):
+		writeJSON(w, map[string]interface{}{
+			"data": map[string]interface{}{
+				"messengerConversationsByCategory": map[string]interface{}{
+					"elements": []interface{}{
+						map[string]interface{}{
+							"entityUrn":      "urn:li:msg_conversation:(urn:li:fsd_profile:test-user-encoded-id,thread001)",
+							"backendUrn":     "urn:li:messagingThread:thread001",
+							"unreadCount":    0,
+							"read":           true,
+							"lastActivityAt":  1741305600000,
+							"conversationParticipants": []interface{}{
+								map[string]interface{}{
+									"hostIdentityUrn": "urn:li:fsd_profile:other-user-id",
+									"participantType": map[string]interface{}{
+										"member": map[string]interface{}{
+											"firstName": map[string]interface{}{"text": "Alice"},
+											"lastName":  map[string]interface{}{"text": "Smith"},
+										},
+									},
+								},
+								map[string]interface{}{
+									"hostIdentityUrn": "urn:li:fsd_profile:test-user-encoded-id",
+									"participantType": map[string]interface{}{
+										"member": map[string]interface{}{
+											"firstName": map[string]interface{}{"text": "Test"},
+											"lastName":  map[string]interface{}{"text": "User"},
+										},
+									},
+								},
+							},
+							"messages": map[string]interface{}{
+								"elements": []interface{}{
+									map[string]interface{}{
+										"entityUrn":   "urn:li:msg_message:msg001",
+										"deliveredAt":  1741305600000,
+										"body":         map[string]interface{}{"text": "Hi there, how are you?"},
+										"sender": map[string]interface{}{
+											"hostIdentityUrn": "urn:li:fsd_profile:other-user-id",
+											"participantType": map[string]interface{}{
+												"member": map[string]interface{}{
+													"firstName": map[string]interface{}{"text": "Alice"},
+													"lastName":  map[string]interface{}{"text": "Smith"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					"paging": map[string]interface{}{"start": 0, "count": 20, "total": 1},
+				},
+			},
+		})
+	case strings.HasPrefix(queryID, "voyagerMessagingDashMessengerMessages."):
+		writeJSON(w, map[string]interface{}{
+			"data": map[string]interface{}{
+				"messengerMessagesByConversation": map[string]interface{}{
+					"elements": []interface{}{
+						map[string]interface{}{
+							"entityUrn":   "urn:li:msg_message:msg001",
+							"deliveredAt":  1741305600000,
+							"body":         map[string]interface{}{"text": "Hi there, how are you?"},
+							"sender": map[string]interface{}{
+								"hostIdentityUrn": "urn:li:fsd_profile:other-user-id",
+								"participantType": map[string]interface{}{
+									"member": map[string]interface{}{
+										"firstName": map[string]interface{}{"text": "Alice"},
+										"lastName":  map[string]interface{}{"text": "Smith"},
+									},
+								},
+							},
+						},
+					},
+					"paging": map[string]interface{}{"start": 0, "count": 20, "total": 1},
+				},
+			},
+		})
+	case strings.HasPrefix(queryID, "voyagerJobsDashJobsFeed."):
+		s.handleGraphQLJobsFeed(w, r)
+	case strings.HasPrefix(queryID, "voyagerJobsDashJobCards."):
+		s.handleGraphQLJobCards(w, r)
+	case strings.HasPrefix(queryID, "voyagerJobsDashJobPostings."):
+		s.handleGraphQLJobPosting(w, r)
 	default:
 		http.Error(w, `{"status":404,"message":"Unknown queryId"}`, http.StatusNotFound)
 	}
+}
+
+// handleGraphQLJobsFeed returns recommended jobs.
+func (s *Server) handleGraphQLJobsFeed(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, map[string]interface{}{
+		"data": map[string]interface{}{
+			"jobsDashJobsFeedAll": map[string]interface{}{
+				"elements": []interface{}{
+					map[string]interface{}{
+						"entitiesResolutionResults": []interface{}{
+							map[string]interface{}{
+								"jobPostingCard": map[string]interface{}{
+									"jobPostingTitle": "Senior Go Engineer",
+									"primaryDescription": map[string]interface{}{
+										"text": "TechCorp · San Francisco, CA",
+									},
+									"jobPosting": map[string]interface{}{
+										"entityUrn": "urn:li:fsd_jobPosting:987654321",
+										"title":     "Senior Go Engineer",
+									},
+								},
+							},
+							map[string]interface{}{
+								"jobPostingCard": map[string]interface{}{
+									"jobPostingTitle": "Backend Developer",
+									"primaryDescription": map[string]interface{}{
+										"text": "StartupCo · New York, NY",
+									},
+									"jobPosting": map[string]interface{}{
+										"entityUrn": "urn:li:fsd_jobPosting:111222333",
+										"title":     "Backend Developer",
+									},
+								},
+							},
+						},
+					},
+				},
+				"paging": map[string]interface{}{"start": 0, "count": 20, "total": 2},
+			},
+		},
+	})
+}
+
+// handleGraphQLJobCards returns saved or applied job cards based on jobCollectionSlug.
+func (s *Server) handleGraphQLJobCards(w http.ResponseWriter, r *http.Request) {
+	vars := r.URL.Query().Get("variables")
+	isApplied := strings.Contains(vars, "jobCollectionSlug:applied")
+
+	if isApplied {
+		writeJSON(w, map[string]interface{}{
+			"data": map[string]interface{}{
+				"jobsDashJobCardsByJobSearchV2": map[string]interface{}{
+					"elements": []interface{}{},
+					"paging":   map[string]interface{}{"start": 0, "count": 20, "total": 0},
+				},
+			},
+		})
+		return
+	}
+
+	// saved jobs
+	writeJSON(w, map[string]interface{}{
+		"data": map[string]interface{}{
+			"jobsDashJobCardsByJobSearchV2": map[string]interface{}{
+				"elements": []interface{}{
+					map[string]interface{}{
+						"jobCard": map[string]interface{}{
+							"jobPostingCardWrapper": map[string]interface{}{
+								"jobPostingCard": map[string]interface{}{
+									"jobPostingTitle": "Senior Go Engineer",
+									"primaryDescription": map[string]interface{}{
+										"text": "TechCorp · San Francisco, CA",
+									},
+									"jobPosting": map[string]interface{}{
+										"entityUrn": "urn:li:fsd_jobPosting:987654321",
+										"title":     "Senior Go Engineer",
+									},
+								},
+							},
+						},
+					},
+				},
+				"paging": map[string]interface{}{"start": 0, "count": 20, "total": 1},
+			},
+		},
+	})
+}
+
+// handleGraphQLJobPosting returns a single job posting detail.
+func (s *Server) handleGraphQLJobPosting(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, map[string]interface{}{
+		"data": map[string]interface{}{
+			"jobsDashJobPostingsById": map[string]interface{}{
+				"entityUrn": "urn:li:fsd_jobPosting:987654321",
+				"title":     "Senior Go Engineer",
+				"description": map[string]interface{}{
+					"text": "We are looking for a Senior Go Engineer to join our platform team.",
+				},
+				"companyDetails": map[string]interface{}{
+					"name": "TechCorp",
+				},
+				"location": map[string]interface{}{
+					"defaultLocalizedName": "San Francisco, CA",
+				},
+				"employmentStatus": map[string]interface{}{
+					"localizedName": "Full-time",
+				},
+				"jobState":          "LISTED",
+				"workRemoteAllowed": true,
+				"companyApplyUrl":   "https://techcorp.com/apply/987654321",
+			},
+		},
+	})
 }

@@ -1,0 +1,9 @@
+{
+  "data": {
+    "relationshipsDashSentInvitationViewsByInvitationType": {
+      "paging": { "start": 0, "count": 20, "total": 0 },
+      "elements": []
+    }
+  },
+  "included": []
+}

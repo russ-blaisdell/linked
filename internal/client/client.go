@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	userAgent      = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+	userAgent      = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
 	clientVersion  = "1.13.42665"
 	defaultTimeout = 30 * time.Second
 )
@@ -92,8 +92,17 @@ func NewWithBaseURL(creds *models.Credentials, baseURL string) (*Client, error) 
 		{Name: "lang", Value: "v=2&lang=en-us"},
 	})
 
+	// Use Chrome TLS fingerprint for real LinkedIn to avoid bot detection.
+	// Mock test servers run on localhost without TLS, so use the default transport.
+	var base http.RoundTripper
+	if isLocalhostURL(baseURL) {
+		base = http.DefaultTransport
+	} else {
+		base = chromeTransport()
+	}
+
 	transport := &cookieTransport{
-		base:       http.DefaultTransport,
+		base:       base,
 		liAt:       creds.LiAt,
 		jsessionid: creds.JSESSIONID,
 		bcookie:    creds.Bcookie,
@@ -124,6 +133,14 @@ func (c *Client) csrfToken() string {
 	return strings.Trim(c.creds.JSESSIONID, `"`)
 }
 
+// fp returns the stored fingerprint value if non-empty, otherwise the fallback.
+func (c *Client) fp(fpVal, fallback string) string {
+	if fpVal != "" {
+		return fpVal
+	}
+	return fallback
+}
+
 // newRequest builds an HTTP request with all LinkedIn-required headers.
 func (c *Client) newRequest(method, path string, body interface{}) (*http.Request, error) {
 	fullURL := c.baseURL + path
@@ -142,24 +159,42 @@ func (c *Client) newRequest(method, path string, body interface{}) (*http.Reques
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
-	req.Header.Set("User-Agent", userAgent)
+	// Use stored browser fingerprint when available, fall back to defaults.
+	var fpUA, fpSecUA, fpSecMobile, fpSecPlatform, fpTrack string
+	if f := c.creds.Fingerprint; f != nil {
+		fpUA = f.UserAgent
+		fpSecUA = f.SecChUA
+		fpSecMobile = f.SecChUAMobile
+		fpSecPlatform = f.SecChUAPlatform
+		fpTrack = f.XLiTrack
+	}
+
+	defaultTrack := fmt.Sprintf(
+		`{"clientVersion":"%s","mpVersion":"%s","osName":"web","timezoneOffset":-5,"timezone":"America/Chicago","deviceFormFactor":"DESKTOP","mpName":"voyager-web","displayDensity":2,"displayWidth":3456,"displayHeight":2234}`,
+		clientVersion, clientVersion,
+	)
+
+	req.Header.Set("User-Agent", c.fp(fpUA, userAgent))
 	req.Header.Set("csrf-token", c.csrfToken())
 	req.Header.Set("x-restli-protocol-version", "2.0.0")
 	req.Header.Set("x-li-lang", "en_US")
-	req.Header.Set("x-li-track", fmt.Sprintf(
-		`{"clientVersion":"%s","mpVersion":"%s","osName":"web","timezoneOffset":-5,"timezone":"America/New_York","deviceFormFactor":"DESKTOP","mpName":"voyager-web","displayDensity":2,"displayWidth":1920,"displayHeight":1080}`,
-		clientVersion, clientVersion,
-	))
+	req.Header.Set("x-li-track", c.fp(fpTrack, defaultTrack))
 	req.Header.Set("Accept", "application/vnd.linkedin.normalized+json+2.1")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-	req.Header.Set("Origin", BaseURL)
+	// Browsers only send Origin on non-GET requests (POST, PUT, DELETE).
+	// Sending Origin on GETs is a bot signal that triggers session revocation.
+	if method != http.MethodGet {
+		req.Header.Set("Origin", BaseURL)
+	}
 	req.Header.Set("Referer", BaseURL+"/feed/")
-	req.Header.Set("sec-ch-ua", `"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"`)
-	req.Header.Set("sec-ch-ua-mobile", "?0")
-	req.Header.Set("sec-ch-ua-platform", `"macOS"`)
+	req.Header.Set("sec-ch-ua", c.fp(fpSecUA, `"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"`))
+	req.Header.Set("sec-ch-ua-mobile", c.fp(fpSecMobile, "?0"))
+	req.Header.Set("sec-ch-ua-platform", c.fp(fpSecPlatform, `"Linux"`))
+	req.Header.Set("sec-ch-prefers-color-scheme", "light")
 	req.Header.Set("sec-fetch-dest", "empty")
 	req.Header.Set("sec-fetch-mode", "cors")
 	req.Header.Set("sec-fetch-site", "same-origin")
+	req.Header.Set("priority", "u=1, i")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -251,6 +286,29 @@ func (c *Client) Delete(path string) error {
 		return err
 	}
 	return c.do(req, nil)
+}
+
+// RawGet performs a GET request and returns the raw response body as bytes.
+// Used for exploring API endpoints without pre-defined response structs.
+func (c *Client) RawGet(path string) ([]byte, int, error) {
+	req, err := c.newRequest(http.MethodGet, path, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	// Use application/json Accept for graphql paths, otherwise the default.
+	if strings.Contains(path, "graphql") {
+		req.Header.Set("Accept", "application/json")
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("executing request: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("reading response: %w", err)
+	}
+	return body, resp.StatusCode, nil
 }
 
 // PutBinary performs a PUT with raw binary data to an absolute URL.

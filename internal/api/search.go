@@ -1,8 +1,9 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
-	"strings"
+	"net/url"
 
 	"github.com/russ-blaisdell/linked/internal/client"
 	"github.com/russ-blaisdell/linked/internal/models"
@@ -18,40 +19,76 @@ func NewSearchService(c *client.Client) *SearchService {
 	return &SearchService{c: c}
 }
 
-// SearchPeople searches LinkedIn members.
-func (s *SearchService) SearchPeople(input models.SearchPeopleInput) (*models.PagedSearchPeople, error) {
-	if input.Count == 0 {
-		input.Count = client.DefaultCount
+// GraphQL response types for the unified search endpoint.
+
+type gqlSearchClusterCollection struct {
+	Paging struct {
+		Start int `json:"start"`
+		Count int `json:"count"`
+		Total int `json:"total"`
+	} `json:"paging"`
+	Elements []struct {
+		Items []struct {
+			Item json.RawMessage `json:"item"`
+		} `json:"items"`
+	} `json:"elements"`
+}
+
+type gqlEntityResult struct {
+	EntityURN       string `json:"entityUrn"`
+	Title           *struct{ Text string `json:"text"` } `json:"title"`
+	PrimarySubtitle *struct{ Text string `json:"text"` } `json:"primarySubtitle"`
+	SecondarySubtitle *struct{ Text string `json:"text"` } `json:"secondarySubtitle"`
+	Summary         *struct{ Text string `json:"text"` } `json:"summary"`
+}
+
+type gqlSearchFeedUpdate struct {
+	Update *struct {
+		Actor *struct {
+			Name *struct{ Text string `json:"text"` } `json:"name"`
+		} `json:"actor"`
+		Commentary *struct {
+			Text *struct{ Text string `json:"text"` } `json:"text"`
+		} `json:"commentary"`
+		Metadata *struct {
+			ShareURN string `json:"shareUrn"`
+			URN      string `json:"urn"`
+		} `json:"metadata"`
+	} `json:"update"`
+}
+
+// doSearch executes a search query against the unified GraphQL search endpoint.
+func (s *SearchService) doSearch(resultType string, keywords string, start, count int) (*gqlSearchClusterCollection, error) {
+	if count == 0 {
+		count = client.DefaultCount
 	}
 
-	params := map[string]string{
-		"q":       "people",
-		"start":   fmt.Sprintf("%d", input.Start),
-		"count":   fmt.Sprintf("%d", input.Count),
-		"filters": buildPeopleFilters(input),
-	}
-	if input.Keywords != "" {
-		params["keywords"] = input.Keywords
-	}
+	path := fmt.Sprintf(
+		"%s?includeWebMetadata=true&variables=(start:%d,count:%d,origin:GLOBAL_SEARCH_HEADER,query:(keywords:%s,flagshipSearchIntent:SEARCH_SRP,queryParameters:List((key:resultType,value:List(%s)))))&queryId=%s",
+		client.EndpointGraphQL, start, count,
+		url.QueryEscape(keywords), resultType,
+		client.EndpointSearchClustersQueryID,
+	)
 
 	var raw struct {
-		Elements []struct {
-			HitInfo struct {
-				MiniProfile voyagerMiniProfile `json:"com.linkedin.voyager.search.SearchProfile"`
-			} `json:"hitInfo"`
-			Distance struct {
-				Value string `json:"value"`
-			} `json:"distance,omitempty"`
-		} `json:"elements"`
-		Total  int `json:"total,omitempty"`
-		Paging struct {
-			Start int `json:"start"`
-			Count int `json:"count"`
-			Total int `json:"total"`
-		} `json:"paging,omitempty"`
+		Data *struct {
+			Collection *gqlSearchClusterCollection `json:"searchDashClustersByAll"`
+		} `json:"data"`
 	}
 
-	if err := s.c.Get(client.EndpointSearch, params, &raw); err != nil {
+	if err := s.c.GetGraphQL(path, &raw); err != nil {
+		return nil, err
+	}
+	if raw.Data == nil || raw.Data.Collection == nil {
+		return &gqlSearchClusterCollection{}, nil
+	}
+	return raw.Data.Collection, nil
+}
+
+// SearchPeople searches LinkedIn members.
+func (s *SearchService) SearchPeople(input models.SearchPeopleInput) (*models.PagedSearchPeople, error) {
+	col, err := s.doSearch("PEOPLE", input.Keywords, input.Start, input.Count)
+	if err != nil {
 		return nil, fmt.Errorf("search people: %w", err)
 	}
 
@@ -59,260 +96,184 @@ func (s *SearchService) SearchPeople(input models.SearchPeopleInput) (*models.Pa
 		Pagination: models.Pagination{
 			Start:   input.Start,
 			Count:   input.Count,
-			Total:   raw.Paging.Total,
-			HasMore: (input.Start + input.Count) < raw.Paging.Total,
+			Total:   col.Paging.Total,
+			HasMore: (input.Start + input.Count) < col.Paging.Total,
 		},
 	}
 
-	for _, el := range raw.Elements {
-		mp := el.HitInfo.MiniProfile
-		if mp.EntityURN == "" {
-			continue
+	for _, cluster := range col.Elements {
+		for _, item := range cluster.Items {
+			var wrapper struct {
+				EntityResult *gqlEntityResult `json:"entityResult"`
+			}
+			if json.Unmarshal(item.Item, &wrapper) != nil || wrapper.EntityResult == nil {
+				continue
+			}
+			er := wrapper.EntityResult
+			name := ""
+			if er.Title != nil {
+				name = er.Title.Text
+			}
+			headline := ""
+			if er.PrimarySubtitle != nil {
+				headline = er.PrimarySubtitle.Text
+			}
+			location := ""
+			if er.SecondarySubtitle != nil {
+				location = er.SecondarySubtitle.Text
+			}
+			result.Items = append(result.Items, models.SearchPeopleResult{
+				Profile: models.Profile{
+					URN:       extractProfileURN(er.EntityURN),
+					FirstName: name,
+					Headline:  headline,
+					Location:  location,
+				},
+			})
 		}
-		result.Items = append(result.Items, models.SearchPeopleResult{
-			Profile: models.Profile{
-				URN:       mp.EntityURN,
-				ProfileID: mp.PublicID,
-				FirstName: mp.FirstName,
-				LastName:  mp.LastName,
-				Headline:  mp.Occupation,
-			},
-			Distance: el.Distance.Value,
-		})
 	}
 
 	return result, nil
 }
 
 // SearchJobs searches LinkedIn job postings.
+// Note: Jobs search via the unified search endpoint returns internal errors
+// from LinkedIn. Use `jobs recommended` or `jobs saved` instead.
 func (s *SearchService) SearchJobs(input models.SearchJobsInput) (*models.PagedJobs, error) {
-	if input.Count == 0 {
-		input.Count = client.DefaultCount
-	}
-
-	params := map[string]string{
-		"q":     "jobSearch",
-		"start": fmt.Sprintf("%d", input.Start),
-		"count": fmt.Sprintf("%d", input.Count),
-	}
-	if input.Keywords != "" {
-		params["keywords"] = input.Keywords
-	}
-	if input.Location != "" {
-		params["locationUnion"] = fmt.Sprintf(`(geoId:%s)`, input.Location)
-	}
-
-	filters := buildJobFilters(input)
-	if filters != "" {
-		params["filters"] = filters
-	}
-
-	var raw struct {
-		Elements []struct {
-			JobCardUnion struct {
-				JobPostingCard struct {
-					EntityURN string `json:"entityUrn"`
-					Title     string `json:"title"`
-					Company   struct {
-						Name          string `json:"name"`
-						UniversalName string `json:"universalName"`
-					} `json:"company"`
-					FormattedLocation string `json:"formattedLocation"`
-					WorkRemoteAllowed bool   `json:"workRemoteAllowed"`
-					PostedAt          int64  `json:"listedAt"`
-				} `json:"com.linkedin.voyager.jobs.JobPostingCard"`
-			} `json:"jobCardUnion"`
-		} `json:"elements"`
-		Paging struct {
-			Start int `json:"start"`
-			Count int `json:"count"`
-			Total int `json:"total"`
-		} `json:"paging,omitempty"`
-	}
-
-	if err := s.c.Get(client.EndpointJobSearchDash, params, &raw); err != nil {
-		return nil, fmt.Errorf("search jobs: %w", err)
-	}
-
-	result := &models.PagedJobs{
-		Pagination: models.Pagination{
-			Start:   input.Start,
-			Count:   input.Count,
-			Total:   raw.Paging.Total,
-			HasMore: (input.Start + input.Count) < raw.Paging.Total,
-		},
-	}
-
-	for _, el := range raw.Elements {
-		card := el.JobCardUnion.JobPostingCard
-		if card.EntityURN == "" {
-			continue
-		}
-		result.Items = append(result.Items, models.Job{
-			URN:      card.EntityURN,
-			Title:    card.Title,
-			Company:  models.Company{Name: card.Company.Name, ID: card.Company.UniversalName},
-			Location: card.FormattedLocation,
-			Remote:   card.WorkRemoteAllowed,
-		})
-	}
-
-	return result, nil
+	return nil, fmt.Errorf("job search is not available via the current API — use 'jobs recommended' instead")
 }
 
 // SearchCompanies searches LinkedIn companies.
 func (s *SearchService) SearchCompanies(keywords string, start, count int) (*models.PagedCompanies, error) {
-	if count == 0 {
-		count = client.DefaultCount
-	}
-	params := map[string]string{
-		"q":        "company",
-		"keywords": keywords,
-		"start":    fmt.Sprintf("%d", start),
-		"count":    fmt.Sprintf("%d", count),
-	}
-
-	var raw struct {
-		Elements []struct {
-			HitInfo struct {
-				Company struct {
-					EntityURN     string `json:"entityUrn"`
-					UniversalName string `json:"universalName"`
-					Name          string `json:"name"`
-					Industry      struct {
-						LocalizedName string `json:"localizedName"`
-					} `json:"industry,omitempty"`
-				} `json:"com.linkedin.voyager.search.SearchCompany"`
-			} `json:"hitInfo"`
-		} `json:"elements"`
-		Paging struct {
-			Start int `json:"start"`
-			Count int `json:"count"`
-			Total int `json:"total"`
-		} `json:"paging,omitempty"`
-	}
-
-	if err := s.c.Get(client.EndpointSearch, params, &raw); err != nil {
+	col, err := s.doSearch("COMPANIES", keywords, start, count)
+	if err != nil {
 		return nil, fmt.Errorf("search companies: %w", err)
 	}
 
 	result := &models.PagedCompanies{
-		Pagination: models.Pagination{Start: start, Count: count, Total: raw.Paging.Total, HasMore: (start + count) < raw.Paging.Total},
+		Pagination: models.Pagination{
+			Start:   start,
+			Count:   count,
+			Total:   col.Paging.Total,
+			HasMore: (start + count) < col.Paging.Total,
+		},
 	}
-	for _, el := range raw.Elements {
-		co := el.HitInfo.Company
-		if co.EntityURN == "" {
-			continue
+
+	for _, cluster := range col.Elements {
+		for _, item := range cluster.Items {
+			var wrapper struct {
+				EntityResult *gqlEntityResult `json:"entityResult"`
+			}
+			if json.Unmarshal(item.Item, &wrapper) != nil || wrapper.EntityResult == nil {
+				continue
+			}
+			er := wrapper.EntityResult
+			name := ""
+			if er.Title != nil {
+				name = er.Title.Text
+			}
+			industry := ""
+			if er.PrimarySubtitle != nil {
+				industry = er.PrimarySubtitle.Text
+			}
+			result.Items = append(result.Items, models.Company{
+				URN:      extractCompanyURN(er.EntityURN),
+				Name:     name,
+				Industry: industry,
+			})
 		}
-		result.Items = append(result.Items, models.Company{
-			URN:      co.EntityURN,
-			ID:       co.UniversalName,
-			Name:     co.Name,
-			Industry: co.Industry.LocalizedName,
-		})
 	}
+
 	return result, nil
 }
 
 // SearchPosts searches LinkedIn posts/content.
 func (s *SearchService) SearchPosts(keywords string, start, count int) (*models.PagedPosts, error) {
-	if count == 0 {
-		count = client.DefaultCount
-	}
-	params := map[string]string{
-		"q":        "blended",
-		"keywords": keywords,
-		"filters":  "List(resultType->CONTENT)",
-		"start":    fmt.Sprintf("%d", start),
-		"count":    fmt.Sprintf("%d", count),
-	}
-
-	var raw struct {
-		Elements []struct {
-			Items []struct {
-				Item struct {
-					EntityUrn string `json:"entityUrn"`
-					Activity  struct {
-						EntityUrn  string `json:"entityUrn"`
-						UpdateText struct {
-							Text string `json:"text"`
-						} `json:"updateText,omitempty"`
-						TotalLikes int   `json:"totalLikes,omitempty"`
-						CreatedAt  int64 `json:"createdAt,omitempty"`
-					} `json:"com.linkedin.voyager.search.SearchActivity,omitempty"`
-				} `json:"item"`
-			} `json:"items,omitempty"`
-		} `json:"elements"`
-		Paging struct {
-			Start int `json:"start"`
-			Count int `json:"count"`
-			Total int `json:"total"`
-		} `json:"paging,omitempty"`
-	}
-
-	if err := s.c.Get(client.EndpointSearchBlended, params, &raw); err != nil {
+	col, err := s.doSearch("CONTENT", keywords, start, count)
+	if err != nil {
 		return nil, fmt.Errorf("search posts: %w", err)
 	}
 
 	result := &models.PagedPosts{
-		Pagination: models.Pagination{Start: start, Count: count, Total: raw.Paging.Total, HasMore: (start + count) < raw.Paging.Total},
+		Pagination: models.Pagination{
+			Start:   start,
+			Count:   count,
+			Total:   col.Paging.Total,
+			HasMore: (start + count) < col.Paging.Total,
+		},
 	}
-	for _, group := range raw.Elements {
-		for _, el := range group.Items {
-			activity := el.Item.Activity
-			urn := activity.EntityUrn
-			if urn == "" {
-				urn = el.Item.EntityUrn
+
+	for _, cluster := range col.Elements {
+		for _, item := range cluster.Items {
+			var wrapper struct {
+				SearchFeedUpdate *gqlSearchFeedUpdate `json:"searchFeedUpdate"`
 			}
-			if urn == "" {
+			if json.Unmarshal(item.Item, &wrapper) != nil || wrapper.SearchFeedUpdate == nil {
 				continue
 			}
+			sfu := wrapper.SearchFeedUpdate
+			if sfu.Update == nil {
+				continue
+			}
+
+			authorName := ""
+			if sfu.Update.Actor != nil && sfu.Update.Actor.Name != nil {
+				authorName = sfu.Update.Actor.Name.Text
+			}
+			body := ""
+			if sfu.Update.Commentary != nil && sfu.Update.Commentary.Text != nil {
+				body = sfu.Update.Commentary.Text.Text
+			}
+			urn := ""
+			if sfu.Update.Metadata != nil {
+				urn = sfu.Update.Metadata.ShareURN
+				if urn == "" {
+					urn = sfu.Update.Metadata.URN
+				}
+			}
+
 			result.Items = append(result.Items, models.Post{
-				URN:       urn,
-				Body:      activity.UpdateText.Text,
-				LikeCount: activity.TotalLikes,
-				PostedAt:  msToTime(activity.CreatedAt),
+				URN:  urn,
+				Body: body,
+				AuthorProfile: models.Profile{
+					FirstName: authorName,
+				},
 			})
 		}
 	}
+
 	return result, nil
 }
 
-// buildPeopleFilters constructs the Voyager filter string for people search.
-func buildPeopleFilters(input models.SearchPeopleInput) string {
-	var parts []string
-	if len(input.Network) > 0 {
-		parts = append(parts, fmt.Sprintf("network->%s", strings.Join(input.Network, "|")))
+// extractProfileURN pulls the fsd_profile URN from the entityResultViewModel URN.
+// Input:  "urn:li:fsd_entityResultViewModel:(urn:li:fsd_profile:ABC123,SEARCH_SRP,DEFAULT)"
+// Output: "urn:li:fsd_profile:ABC123"
+func extractProfileURN(entityResultURN string) string {
+	const prefix = "urn:li:fsd_profile:"
+	for i := 0; i < len(entityResultURN)-len(prefix); i++ {
+		if entityResultURN[i:i+len(prefix)] == prefix {
+			// Find end — either comma or closing paren
+			end := i + len(prefix)
+			for end < len(entityResultURN) && entityResultURN[end] != ',' && entityResultURN[end] != ')' {
+				end++
+			}
+			return entityResultURN[i:end]
+		}
 	}
-	if input.Company != "" {
-		parts = append(parts, fmt.Sprintf("currentCompany->%s", input.Company))
-	}
-	if input.Title != "" {
-		parts = append(parts, fmt.Sprintf("title->%s", input.Title))
-	}
-	if input.School != "" {
-		parts = append(parts, fmt.Sprintf("school->%s", input.School))
-	}
-	if len(parts) == 0 {
-		return "List()"
-	}
-	return fmt.Sprintf("List(%s)", strings.Join(parts, ","))
+	return entityResultURN
 }
 
-// buildJobFilters constructs the Voyager filter string for job search.
-func buildJobFilters(input models.SearchJobsInput) string {
-	var parts []string
-	if input.Remote {
-		parts = append(parts, "workplaceType->2") // 2 = REMOTE
+// extractCompanyURN pulls the fsd_company URN from the entityResultViewModel URN.
+func extractCompanyURN(entityResultURN string) string {
+	const prefix = "urn:li:fsd_company:"
+	for i := 0; i < len(entityResultURN)-len(prefix); i++ {
+		if entityResultURN[i:i+len(prefix)] == prefix {
+			end := i + len(prefix)
+			for end < len(entityResultURN) && entityResultURN[end] != ',' && entityResultURN[end] != ')' {
+				end++
+			}
+			return entityResultURN[i:end]
+		}
 	}
-	if input.ExperienceLevel != "" {
-		parts = append(parts, fmt.Sprintf("experienceLevel->%s", input.ExperienceLevel))
-	}
-	if input.EmploymentType != "" {
-		parts = append(parts, fmt.Sprintf("employmentType->%s", input.EmploymentType))
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return fmt.Sprintf("List(%s)", strings.Join(parts, ","))
+	return entityResultURN
 }

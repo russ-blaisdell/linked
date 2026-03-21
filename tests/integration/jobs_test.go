@@ -125,20 +125,10 @@ func TestSearchJobs(t *testing.T) {
 
 	input := models.SearchJobsInput{
 		Keywords: "golang engineer",
-		Remote:   true,
 	}
 
-	result, err := li.Search.SearchJobs(input)
-	if err != nil {
-		t.Fatalf("SearchJobs() error: %v", err)
-	}
-
-	if len(result.Items) == 0 {
-		t.Fatal("expected at least one job result")
-	}
-
-	job := result.Items[0]
-	if job.Title == "" {
-		t.Error("job title should not be empty")
+	_, err := li.Search.SearchJobs(input)
+	if err == nil {
+		t.Fatal("expected error for unsupported job search")
 	}
 }

@@ -230,30 +230,33 @@ func (s *ConnectionsService) ListPendingInvitations(start, count int) (*models.P
 }
 
 // ListSentInvitations returns outbound connection invitations.
+// Uses the GraphQL sent invitation views endpoint.
 func (s *ConnectionsService) ListSentInvitations(start, count int) (*models.PagedInvitations, error) {
 	if count == 0 {
 		count = client.DefaultCount
 	}
-	params := map[string]string{
-		"q":     "sentInvitation",
-		"start": fmt.Sprintf("%d", start),
-		"count": fmt.Sprintf("%d", count),
-	}
+
+	path := fmt.Sprintf(
+		"%s?includeWebMetadata=true&variables=(invitationType:CONNECTION,start:%d,count:%d)&queryId=%s",
+		client.EndpointGraphQL, start, count,
+		client.EndpointSentInvitationViewsQueryID,
+	)
 
 	var raw struct {
-		Elements []voyagerInvitation `json:"elements"`
-		Paging   struct {
-			Start int `json:"start"`
-			Count int `json:"count"`
-			Total int `json:"total"`
-		} `json:"paging"`
+		Data *struct {
+			Collection *graphqlInvitationCollection `json:"relationshipsDashSentInvitationViewsByInvitationType"`
+		} `json:"data"`
 	}
 
-	if err := s.c.Get(client.EndpointSentInvitations, params, &raw); err != nil {
+	if err := s.c.GetGraphQL(path, &raw); err != nil {
 		return nil, fmt.Errorf("list sent invitations: %w", err)
 	}
 
-	return mapInvitations(raw.Elements, "OUTBOUND", raw.Paging.Start, raw.Paging.Count, raw.Paging.Total), nil
+	var col *graphqlInvitationCollection
+	if raw.Data != nil {
+		col = raw.Data.Collection
+	}
+	return parseInvitationCollection(col, start, count, "OUTBOUND", nil), nil
 }
 
 // SendConnectionRequest sends a connection request to a profile.

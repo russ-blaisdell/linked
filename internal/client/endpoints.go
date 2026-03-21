@@ -107,7 +107,10 @@ const (
 	EndpointShares        = VoyagerAPI + "/shares"
 	EndpointMediaUpload   = VoyagerAPI + "/assets"
 
-	// Search
+	// Search (GraphQL)
+	EndpointSearchClustersQueryID = "voyagerSearchDashClusters.05111e1b90ee7fea15bebe9f9410ced9"
+
+	// Search (legacy — deprecated)
 	EndpointSearch        = VoyagerAPI + "/search/hits"
 	EndpointSearchBlended = VoyagerAPI + "/search/blended"
 	EndpointJobSearchDash = VoyagerAPI + "/jobs/search"

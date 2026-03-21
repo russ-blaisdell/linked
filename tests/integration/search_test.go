@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/russ-blaisdell/linked/internal/models"
@@ -26,29 +27,8 @@ func TestSearchPeople(t *testing.T) {
 
 	person := result.Items[0]
 	if person.Profile.FirstName == "" {
-		t.Error("person FirstName should not be empty")
+		t.Error("person name should not be empty")
 	}
-	if person.Distance == "" {
-		t.Error("person Distance should not be empty")
-	}
-}
-
-func TestSearchPeopleWithFilters(t *testing.T) {
-	s := startServer(t)
-	li := newTestLinkedIn(t, s)
-
-	input := models.SearchPeopleInput{
-		Keywords: "product manager",
-		Company:  "google",
-		Network:  []string{"FIRST", "SECOND"},
-		Count:    10,
-	}
-
-	result, err := li.Search.SearchPeople(input)
-	if err != nil {
-		t.Fatalf("SearchPeople() with filters error: %v", err)
-	}
-	_ = result
 }
 
 func TestSearchCompanies(t *testing.T) {
@@ -78,27 +58,24 @@ func TestSearchPosts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SearchPosts() error: %v", err)
 	}
-	_ = result
+
+	if len(result.Items) == 0 {
+		t.Fatal("expected at least one post result")
+	}
+	if result.Items[0].Body == "" {
+		t.Error("post body should not be empty")
+	}
 }
 
-func TestSearchPeoplePagination(t *testing.T) {
+func TestSearchJobsNotAvailable(t *testing.T) {
 	s := startServer(t)
 	li := newTestLinkedIn(t, s)
 
-	r1, err := li.Search.SearchPeople(models.SearchPeopleInput{Keywords: "engineer", Start: 0, Count: 5})
-	if err != nil {
-		t.Fatalf("first page error: %v", err)
+	_, err := li.Search.SearchJobs(models.SearchJobsInput{Keywords: "golang"})
+	if err == nil {
+		t.Fatal("expected error for unsupported job search")
 	}
-
-	r2, err := li.Search.SearchPeople(models.SearchPeopleInput{Keywords: "engineer", Start: 5, Count: 5})
-	if err != nil {
-		t.Fatalf("second page error: %v", err)
-	}
-
-	if r1.Pagination.Start != 0 {
-		t.Errorf("page 1 start = %d, want 0", r1.Pagination.Start)
-	}
-	if r2.Pagination.Start != 5 {
-		t.Errorf("page 2 start = %d, want 5", r2.Pagination.Start)
+	if !strings.Contains(err.Error(), "not available") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -805,6 +805,8 @@ func (s *Server) handleGraphQL(w http.ResponseWriter, r *http.Request) {
 		s.handleGraphQLJobCards(w, r)
 	case strings.HasPrefix(queryID, "voyagerJobsDashJobPostings."):
 		s.handleGraphQLJobPosting(w, r)
+	case strings.HasPrefix(queryID, "voyagerSearchDashClusters."):
+		s.handleGraphQLSearch(w, r)
 	default:
 		http.Error(w, `{"status":404,"message":"Unknown queryId"}`, http.StatusNotFound)
 	}
@@ -918,6 +920,64 @@ func (s *Server) handleGraphQLJobPosting(w http.ResponseWriter, _ *http.Request)
 				"jobState":          "LISTED",
 				"workRemoteAllowed": true,
 				"companyApplyUrl":   "https://techcorp.com/apply/987654321",
+			},
+		},
+	})
+}
+
+// handleGraphQLSearch returns mock search results.
+func (s *Server) handleGraphQLSearch(w http.ResponseWriter, r *http.Request) {
+	vars := r.URL.Query().Get("variables")
+
+	if strings.Contains(vars, "CONTENT") {
+		// Posts search
+		writeJSON(w, map[string]interface{}{
+			"data": map[string]interface{}{
+				"searchDashClustersByAll": map[string]interface{}{
+					"elements": []interface{}{
+						map[string]interface{}{
+							"items": []interface{}{
+								map[string]interface{}{
+									"item": map[string]interface{}{
+										"searchFeedUpdate": map[string]interface{}{
+											"update": map[string]interface{}{
+												"actor":      map[string]interface{}{"name": map[string]interface{}{"text": "Jane Doe"}},
+												"commentary": map[string]interface{}{"text": map[string]interface{}{"text": "Great article about cloud architecture!"}},
+												"metadata":   map[string]interface{}{"shareUrn": "urn:li:ugcPost:12345"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					"paging": map[string]interface{}{"start": 0, "count": 20, "total": 1},
+				},
+			},
+		})
+		return
+	}
+
+	// People or Companies search (entityResult format)
+	writeJSON(w, map[string]interface{}{
+		"data": map[string]interface{}{
+			"searchDashClustersByAll": map[string]interface{}{
+				"elements": []interface{}{
+					map[string]interface{}{
+						"items": []interface{}{
+							map[string]interface{}{
+								"item": map[string]interface{}{
+									"entityResult": map[string]interface{}{
+										"entityUrn":       "urn:li:fsd_entityResultViewModel:(urn:li:fsd_profile:test-id,SEARCH_SRP,DEFAULT)",
+										"title":           map[string]interface{}{"text": "Alex Engineer"},
+										"primarySubtitle": map[string]interface{}{"text": "Software Engineer at FutureCo"},
+									},
+								},
+							},
+						},
+					},
+				},
+				"paging": map[string]interface{}{"start": 0, "count": 20, "total": 1},
 			},
 		},
 	})

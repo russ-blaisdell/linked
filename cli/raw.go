@@ -11,16 +11,19 @@ import (
 )
 
 func newRawCmd() *cobra.Command {
-	return &cobra.Command{
+	var method, data string
+
+	cmd := &cobra.Command{
 		Use:   "raw <path>",
-		Short: "Make a raw authenticated GET request to LinkedIn",
+		Short: "Make a raw authenticated request to LinkedIn",
 		Long: `Fetch any LinkedIn API path with full authentication and return the raw response.
 Useful for exploring and debugging API endpoints.
 
 The path is appended to https://www.linkedin.com — pass everything after that.
 For GraphQL endpoints the Accept header is automatically set to application/json.`,
 		Example: `  linked raw /voyager/api/me
-  linked raw "/voyager/api/graphql?queryId=voyagerRelationshipsDashInvitationViews.57e1286f887065b96393b947e09ef04c&variables=(q:receivedInvitation,start:0,count:5)"`,
+  linked raw "/voyager/api/graphql?queryId=...&variables=(...)"
+  linked raw --method POST --data '{"body":{"text":"hello"}}' /voyager/api/messengerMessages?action=createMessage`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			creds, err := config.LoadCredentials(globalProfile)
@@ -32,7 +35,14 @@ For GraphQL endpoints the Accept header is automatically set to application/json
 				return fmt.Errorf("creating client: %w", err)
 			}
 
-			body, status, err := c.RawGet(args[0])
+			var body []byte
+			var status int
+
+			if method == "POST" && data != "" {
+				body, status, err = c.RawPost(args[0], []byte(data))
+			} else {
+				body, status, err = c.RawGet(args[0])
+			}
 			if err != nil {
 				return err
 			}
@@ -48,4 +58,8 @@ For GraphQL endpoints the Accept header is automatically set to application/json
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVarP(&method, "method", "X", "GET", "HTTP method (GET or POST)")
+	cmd.Flags().StringVarP(&data, "data", "d", "", "JSON body for POST requests")
+	return cmd
 }

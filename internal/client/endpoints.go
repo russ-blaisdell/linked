@@ -71,6 +71,8 @@ const (
 	EndpointMessengerMessagesQueryID      = "voyagerMessagingDashMessengerMessages.073958b6fdfe5f5ceeb4d0416523317e"
 	EndpointMessengerMailboxCountsQueryID = "voyagerMessagingDashMessengerMailboxCounts.15769ef365ec721fc539d76dbef5f813"
 
+	EndpointDashMessengerCreateMessage = VoyagerAPI + "/voyagerMessagingDashMessengerMessages?action=createMessage"
+
 	// Messaging (legacy — deprecated, kept for reference)
 	EndpointConversations      = VoyagerAPI + "/messaging/conversations"
 	EndpointConversationByID   = VoyagerAPI + "/messaging/conversations/%s"

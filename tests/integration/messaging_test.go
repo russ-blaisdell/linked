@@ -1,8 +1,9 @@
 package integration_test
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/russ-blaisdell/linked/internal/models"
 )
 
 func TestListConversations(t *testing.T) {
@@ -75,20 +76,16 @@ func TestListUnread(t *testing.T) {
 	}
 }
 
-func TestSendMessageNotSupported(t *testing.T) {
+func TestSendMessageReply(t *testing.T) {
 	s := startServer(t)
 	li := newTestLinkedIn(t, s)
 
-	err := li.Messaging.SendMessage(struct {
-		ConversationURN string
-		RecipientURNs   []string
-		Body            string
-	}{Body: "test"})
-	if err == nil {
-		t.Fatal("expected error for unsupported send message")
+	input := models.SendMessageInput{
+		ConversationURN: "urn:li:msg_conversation:(urn:li:fsd_profile:test-user-encoded-id,thread001)",
+		Body:            "Test reply",
 	}
-	if !strings.Contains(err.Error(), "not yet supported") {
-		t.Fatalf("unexpected error: %v", err)
+	if err := li.Messaging.SendMessage(input); err != nil {
+		t.Fatalf("SendMessage() error: %v", err)
 	}
 }
 

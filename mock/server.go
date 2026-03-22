@@ -142,6 +142,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/voyager/api/feed/notifications", s.handleNotifications)
 	mux.HandleFunc("/voyager/api/voyagerIdentityDashNotificationCards", s.handleDashNotificationCards)
 	mux.HandleFunc("/voyager/api/voyagerNotificationsDashBadgingItemCounts", s.handleDashBadgingCounts)
+	mux.HandleFunc("/voyager/api/voyagerMessagingDashMessengerMessages", s.handleDashMessengerMessages)
 	mux.HandleFunc("/voyager/api/ugcPosts", s.handleUGCPosts)
 	mux.HandleFunc("/voyager/api/socialActions/", s.handleSocialActions)
 
@@ -696,6 +697,19 @@ func (s *Server) handleDashBadgingCounts(w http.ResponseWriter, r *http.Request)
 			},
 		},
 	})
+}
+
+func (s *Server) handleDashMessengerMessages(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("action") == "createMessage" && r.Method == "POST" {
+		writeJSON(w, map[string]interface{}{
+			"value": map[string]interface{}{
+				"entityUrn":              "urn:li:msg_message:test-msg-001",
+				"backendConversationUrn": "urn:li:messagingThread:test-thread-001",
+			},
+		})
+		return
+	}
+	http.Error(w, `{"status":404}`, http.StatusNotFound)
 }
 
 // handleGraphQL routes GraphQL requests by queryId parameter.

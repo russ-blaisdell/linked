@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -224,9 +225,67 @@ func (s *MessagingService) GetConversation(conversationID string, start, count i
 }
 
 // SendMessage sends a message to an existing conversation or starts a new one.
-// TODO: Needs migration to new messaging protocol (old REST endpoint is dead).
+// Uses the voyagerMessagingDashMessengerMessages?action=createMessage endpoint.
 func (s *MessagingService) SendMessage(input models.SendMessageInput) error {
-	return fmt.Errorf("send message is not yet supported (endpoint migration in progress)")
+	profileURN, err := s.getProfileURN()
+	if err != nil {
+		return err
+	}
+
+	// Build conversation URN for replies.
+	var conversationURN string
+	if input.ConversationURN != "" {
+		conversationURN = input.ConversationURN
+	}
+
+	// Generate random bytes for tracking and origin token.
+	randomBytes := make([]byte, 16)
+	rand.Read(randomBytes)
+
+	// Origin token: UUID format.
+	originToken := fmt.Sprintf("%x-%x-%x-%x-%x",
+		randomBytes[0:4], randomBytes[4:6], randomBytes[6:8],
+		randomBytes[8:10], randomBytes[10:16])
+
+	// Build the JSON payload manually because the trackingId must be raw bytes
+	// encoded as a latin-1 string. Go's json.Marshal escapes non-UTF8 bytes as
+	// \uXXXX which LinkedIn rejects with 400. We build the JSON string directly.
+	msgObj := map[string]interface{}{
+		"body":                map[string]interface{}{"attributes": []interface{}{}, "text": input.Body},
+		"renderContentUnions": []interface{}{},
+		"originToken":         originToken,
+	}
+	if conversationURN != "" {
+		msgObj["conversationUrn"] = conversationURN
+	}
+
+	msgJSON, _ := json.Marshal(msgObj)
+	mailboxJSON, _ := json.Marshal(profileURN)
+
+	// Build the tracking ID as a raw JSON string with latin-1 encoded bytes.
+	var trackingBuf []byte
+	trackingBuf = append(trackingBuf, '"')
+	for _, b := range randomBytes {
+		if b == '"' || b == '\\' {
+			trackingBuf = append(trackingBuf, '\\', b)
+		} else if b < 0x20 {
+			trackingBuf = append(trackingBuf, []byte(fmt.Sprintf("\\u%04x", b))...)
+		} else {
+			trackingBuf = append(trackingBuf, b)
+		}
+	}
+	trackingBuf = append(trackingBuf, '"')
+
+	payload := fmt.Sprintf(`{"message":%s,"mailboxUrn":%s,"trackingId":%s,"dedupeByClientGeneratedToken":false`,
+		msgJSON, mailboxJSON, trackingBuf)
+
+	if conversationURN == "" && len(input.RecipientURNs) > 0 {
+		recipJSON, _ := json.Marshal(input.RecipientURNs)
+		payload += fmt.Sprintf(`,"hostRecipientUrns":%s`, recipJSON)
+	}
+	payload += "}"
+
+	return s.c.PostMessengerRaw(client.EndpointDashMessengerCreateMessage, []byte(payload), nil)
 }
 
 // MarkRead marks a conversation as read.

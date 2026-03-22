@@ -311,6 +311,70 @@ func (c *Client) RawGet(path string) ([]byte, int, error) {
 	return body, resp.StatusCode, nil
 }
 
+// PostMessenger performs a POST to a messenger endpoint with the correct headers.
+// Messenger endpoints use text/plain content type and application/json accept,
+// unlike the standard Voyager endpoints.
+func (c *Client) PostMessenger(path string, body interface{}, dest interface{}) error {
+	data, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	req, err := c.newRequest(http.MethodPost, path, nil)
+	if err != nil {
+		return err
+	}
+	req.Body = io.NopCloser(bytes.NewReader(data))
+	req.ContentLength = int64(len(data))
+	req.Header.Set("Content-Type", "text/plain;charset=UTF-8")
+	req.Header.Set("Accept", "application/json")
+
+	return c.do(req, dest)
+}
+
+// PostMessengerRaw performs a POST to a messenger endpoint with pre-built JSON bytes.
+// Messenger endpoints are sensitive to extra headers — only the essential headers
+// (csrf-token, x-restli-protocol-version, accept, content-type, cookies) are sent.
+func (c *Client) PostMessengerRaw(path string, rawJSON []byte, dest interface{}) error {
+	fullURL := c.baseURL + path
+	req, err := http.NewRequest(http.MethodPost, fullURL, bytes.NewReader(rawJSON))
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+	req.Header.Set("accept", "application/json")
+	req.Header.Set("content-type", "text/plain;charset=UTF-8")
+	req.Header.Set("csrf-token", c.csrfToken())
+	req.Header.Set("x-restli-protocol-version", "2.0.0")
+	return c.do(req, dest)
+}
+
+// RawPost performs a POST request with a body and returns the raw response.
+func (c *Client) RawPost(path string, jsonBody []byte) ([]byte, int, error) {
+	req, err := c.newRequest(http.MethodPost, path, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Body = io.NopCloser(bytes.NewReader(jsonBody))
+	req.ContentLength = int64(len(jsonBody))
+	// Messenger endpoints use text/plain content type and application/json accept.
+	if strings.Contains(path, "Messenger") || strings.Contains(path, "messenger") {
+		req.Header.Set("Content-Type", "text/plain;charset=UTF-8")
+		req.Header.Set("Accept", "application/json")
+	} else {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("executing request: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("reading response: %w", err)
+	}
+	return body, resp.StatusCode, nil
+}
+
 // PutBinary performs a PUT with raw binary data to an absolute URL.
 // Used for media uploads where LinkedIn returns an external upload URL.
 func (c *Client) PutBinary(uploadURL string, data []byte, contentType string) error {

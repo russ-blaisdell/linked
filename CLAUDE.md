@@ -211,7 +211,7 @@ Stored at: `~/.openclaw/credentials/linkedin/<profile>/creds.json`
 
 ---
 
-## Live API Test Results (2026-03-21)
+## Live API Test Results (2026-03-22)
 
 LinkedIn has deprecated most of the old Voyager REST API (`/voyager/api/*`) and migrated to GraphQL (`/voyager/api/graphql?queryId=...`) and Dash endpoints (`/voyager/api/voyager*Dash*`, `/voyager/api/*/dash/*`). Session revocation was caused by Go's default TLS fingerprint being flagged by Cloudflare — fixed with `utls` Chrome fingerprint impersonation and HTTP/2 support.
 
@@ -233,12 +233,12 @@ LinkedIn has deprecated most of the old Voyager REST API (`/voyager/api/*`) and 
 | `profile contact` | ❌ 410 | deprecated, no replacement found |
 | `connections list` | ✅ | `/relationships/dash/connections` + `/identity/dash/profiles` for name resolution |
 | `connections pending` | ✅ | GraphQL `voyagerRelationshipsDashInvitationViews` + `InvitationsSummary` for total count |
-| `connections sent` | ❌ 400 | old REST endpoint dead, needs GraphQL migration |
+| `connections sent` | ✅ | GraphQL `voyagerRelationshipsDashSentInvitationViews` |
 | `connections mutual` | ❌ 404 | old REST endpoint dead |
 | `messages list` | ✅ | GraphQL `voyagerMessagingDashMessengerConversations` (find-conversations-by-category) |
 | `messages unread` | ✅ | same endpoint, filtered client-side |
 | `messages read` | ✅ | GraphQL `voyagerMessagingDashMessengerMessages` (get-messages-by-conversation) |
-| `messages send` | ⏸️ stubbed | old REST dead, new write protocol unknown |
+| `messages send` | ⚠️ works but revokes session | Python helper via `voyagerMessagingDashMessengerMessages?action=createMessage` |
 | `messages mark-read` | ⏸️ stubbed | new write protocol unknown |
 | `messages star/unstar` | ⏸️ stubbed | new write protocol unknown |
 | `messages archive/unarchive` | ⏸️ stubbed | new write protocol unknown |
@@ -255,10 +255,10 @@ LinkedIn has deprecated most of the old Voyager REST API (`/voyager/api/*`) and 
 | `companies get` | ✅ | `/organization/companies?q=universalName` (normalized response) |
 | `companies posts` | ❌ 400 | needs new endpoint |
 | `companies employees` | ❌ 404 | uses dead search endpoint |
-| `search people` | ❌ 404 | `/search/hits` deprecated, needs GraphQL migration |
-| `search jobs` | ❌ 404 | `/jobs/search` dead |
-| `search companies` | ❌ 404 | `/search/hits` deprecated |
-| `search posts` | ❌ 404 | `/search/blended` dead |
+| `search people` | ✅ | GraphQL `voyagerSearchDashClusters` (entityResult) |
+| `search jobs` | ⏸️ stubbed | LinkedIn returns internal error via search clusters |
+| `search companies` | ✅ | GraphQL `voyagerSearchDashClusters` (entityResult) |
+| `search posts` | ✅ | GraphQL `voyagerSearchDashClusters` (searchFeedUpdate) |
 | `notifications list` | ✅ | `/voyagerIdentityDashNotificationCards` (normalized format) |
 | `notifications count` | ✅ | `/voyagerNotificationsDashBadgingItemCounts` |
 | `notifications mark-read` | ⏸️ stubbed | new endpoint unknown |
@@ -280,3 +280,10 @@ LinkedIn has deprecated most of the old Voyager REST API (`/voyager/api/*`) and 
 | `voyagerJobsDashJobsFeed.40bc6ea7c5b88757481d40f6e4527f17` | Recommended jobs feed |
 | `voyagerJobsDashJobCards.7fb7b035d6233f835789e4088cdbf44b` | Job cards (saved/applied collections) |
 | `voyagerJobsDashJobPostings.891aed7916d7453a37e4bbf5f1f60de4` | Single job posting detail |
+| `voyagerSearchDashClusters.05111e1b90ee7fea15bebe9f9410ced9` | Unified search (people, companies, posts) |
+
+### Known issues
+
+- **Message send revokes session**: `messages send` delivers the message successfully but LinkedIn's async bot detection revokes the session afterward. The send uses an embedded Python script (Go's TLS stack triggers revocation). Root cause is unknown — may be IP/timing/TLS session correlation.
+- **Search jobs**: LinkedIn's search clusters endpoint returns an internal error for `resultType=JOBS`. Use `jobs recommended` or `jobs saved` instead.
+- **Profile get for others**: Works via `/identity/dash/profiles` but doesn't return experience/education/skills — only basic info (name, headline, location).

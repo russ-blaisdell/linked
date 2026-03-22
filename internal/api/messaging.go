@@ -1,15 +1,21 @@
 package api
 
 import (
-	"crypto/rand"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
+	"os/exec"
 	"time"
 
 	"github.com/russ-blaisdell/linked/internal/client"
+	"github.com/russ-blaisdell/linked/internal/config"
 	"github.com/russ-blaisdell/linked/internal/models"
 )
+
+//go:embed messenger_send.py
+var messengerSendScript string
 
 // MessagingService handles LinkedIn messaging operations.
 type MessagingService struct {
@@ -225,67 +231,42 @@ func (s *MessagingService) GetConversation(conversationID string, start, count i
 }
 
 // SendMessage sends a message to an existing conversation or starts a new one.
-// Uses the voyagerMessagingDashMessengerMessages?action=createMessage endpoint.
+// Uses a Python helper script because LinkedIn's messenger POST endpoint is
+// extremely sensitive to TLS fingerprints and HTTP headers — Go's TLS stack
+// (both default and utls) triggers session revocation, while Python's http.client
+// works reliably. The Python script sends only the 4 essential headers.
 func (s *MessagingService) SendMessage(input models.SendMessageInput) error {
-	profileURN, err := s.getProfileURN()
+	if input.ConversationURN == "" && len(input.RecipientURNs) == 0 {
+		return fmt.Errorf("provide a conversation URN to reply or recipient URNs to start a new conversation")
+	}
+	if input.Body == "" {
+		return fmt.Errorf("message body is required")
+	}
+
+	// Write the embedded Python script to a temp file.
+	tmpFile, err := os.CreateTemp("", "linked-messenger-*.py")
 	if err != nil {
-		return err
+		return fmt.Errorf("creating temp script: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	if _, err := tmpFile.WriteString(messengerSendScript); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("writing temp script: %w", err)
+	}
+	tmpFile.Close()
+
+	// Get credentials path.
+	credsPath, err := config.CredentialsPath("default")
+	if err != nil {
+		return fmt.Errorf("finding credentials: %w", err)
 	}
 
-	// Build conversation URN for replies.
-	var conversationURN string
-	if input.ConversationURN != "" {
-		conversationURN = input.ConversationURN
+	cmd := exec.Command("python3", tmpFile.Name(), credsPath, input.ConversationURN, input.Body)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("send message: %s", string(output))
 	}
-
-	// Generate random bytes for tracking and origin token.
-	randomBytes := make([]byte, 16)
-	rand.Read(randomBytes)
-
-	// Origin token: UUID format.
-	originToken := fmt.Sprintf("%x-%x-%x-%x-%x",
-		randomBytes[0:4], randomBytes[4:6], randomBytes[6:8],
-		randomBytes[8:10], randomBytes[10:16])
-
-	// Build the JSON payload manually because the trackingId must be raw bytes
-	// encoded as a latin-1 string. Go's json.Marshal escapes non-UTF8 bytes as
-	// \uXXXX which LinkedIn rejects with 400. We build the JSON string directly.
-	msgObj := map[string]interface{}{
-		"body":                map[string]interface{}{"attributes": []interface{}{}, "text": input.Body},
-		"renderContentUnions": []interface{}{},
-		"originToken":         originToken,
-	}
-	if conversationURN != "" {
-		msgObj["conversationUrn"] = conversationURN
-	}
-
-	msgJSON, _ := json.Marshal(msgObj)
-	mailboxJSON, _ := json.Marshal(profileURN)
-
-	// Build the tracking ID as a raw JSON string with latin-1 encoded bytes.
-	var trackingBuf []byte
-	trackingBuf = append(trackingBuf, '"')
-	for _, b := range randomBytes {
-		if b == '"' || b == '\\' {
-			trackingBuf = append(trackingBuf, '\\', b)
-		} else if b < 0x20 {
-			trackingBuf = append(trackingBuf, []byte(fmt.Sprintf("\\u%04x", b))...)
-		} else {
-			trackingBuf = append(trackingBuf, b)
-		}
-	}
-	trackingBuf = append(trackingBuf, '"')
-
-	payload := fmt.Sprintf(`{"message":%s,"mailboxUrn":%s,"trackingId":%s,"dedupeByClientGeneratedToken":false`,
-		msgJSON, mailboxJSON, trackingBuf)
-
-	if conversationURN == "" && len(input.RecipientURNs) > 0 {
-		recipJSON, _ := json.Marshal(input.RecipientURNs)
-		payload += fmt.Sprintf(`,"hostRecipientUrns":%s`, recipJSON)
-	}
-	payload += "}"
-
-	return s.c.PostMessengerRaw(client.EndpointDashMessengerCreateMessage, []byte(payload), nil)
+	return nil
 }
 
 // MarkRead marks a conversation as read.

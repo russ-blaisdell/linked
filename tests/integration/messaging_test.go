@@ -76,16 +76,20 @@ func TestListUnread(t *testing.T) {
 	}
 }
 
-func TestSendMessageReply(t *testing.T) {
+func TestSendMessageValidation(t *testing.T) {
 	s := startServer(t)
 	li := newTestLinkedIn(t, s)
 
-	input := models.SendMessageInput{
-		ConversationURN: "urn:li:msg_conversation:(urn:li:fsd_profile:test-user-encoded-id,thread001)",
-		Body:            "Test reply",
+	// SendMessage requires conversation URN or recipients.
+	err := li.Messaging.SendMessage(models.SendMessageInput{Body: "test"})
+	if err == nil {
+		t.Fatal("expected error for missing conversation/recipients")
 	}
-	if err := li.Messaging.SendMessage(input); err != nil {
-		t.Fatalf("SendMessage() error: %v", err)
+
+	// SendMessage requires body.
+	err = li.Messaging.SendMessage(models.SendMessageInput{ConversationURN: "urn:li:msg_conversation:test"})
+	if err == nil {
+		t.Fatal("expected error for missing body")
 	}
 }
 

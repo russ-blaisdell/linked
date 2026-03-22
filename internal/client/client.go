@@ -333,8 +333,9 @@ func (c *Client) PostMessenger(path string, body interface{}, dest interface{}) 
 }
 
 // PostMessengerRaw performs a POST to a messenger endpoint with pre-built JSON bytes.
-// Messenger endpoints are sensitive to extra headers — only the essential headers
-// (csrf-token, x-restli-protocol-version, accept, content-type, cookies) are sent.
+// Messenger endpoints are sensitive to the Chrome utls TLS fingerprint and extra
+// headers — using them causes immediate session revocation. Instead, this method
+// uses Go's default TLS transport and sends only the essential headers.
 func (c *Client) PostMessengerRaw(path string, rawJSON []byte, dest interface{}) error {
 	fullURL := c.baseURL + path
 	req, err := http.NewRequest(http.MethodPost, fullURL, bytes.NewReader(rawJSON))
@@ -345,7 +346,42 @@ func (c *Client) PostMessengerRaw(path string, rawJSON []byte, dest interface{})
 	req.Header.Set("content-type", "text/plain;charset=UTF-8")
 	req.Header.Set("csrf-token", c.csrfToken())
 	req.Header.Set("x-restli-protocol-version", "2.0.0")
-	return c.do(req, dest)
+
+	// Use a separate HTTP client with Go's default TLS (not utls Chrome fingerprint).
+	// The messenger POST endpoint rejects requests that come through Chrome-fingerprinted
+	// TLS, causing session revocation. Standard Go TLS works (verified via Python http.client).
+	messengerClient := &http.Client{
+		Timeout: defaultTimeout,
+		Transport: &cookieTransport{
+			base:       http.DefaultTransport,
+			liAt:       c.creds.LiAt,
+			jsessionid: c.creds.JSESSIONID,
+			bcookie:    c.creds.Bcookie,
+			bscookie:   c.creds.Bscookie,
+		},
+	}
+
+	resp, err := messengerClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("executing request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return apiError(resp.StatusCode, body)
+	}
+
+	if dest != nil && len(body) > 0 {
+		if err := json.Unmarshal(body, dest); err != nil {
+			return fmt.Errorf("decoding response: %w", err)
+		}
+	}
+	return nil
 }
 
 // RawPost performs a POST request with a body and returns the raw response.

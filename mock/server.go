@@ -111,6 +111,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Messaging
 	mux.HandleFunc("/voyager/api/messaging/conversations/", s.handleConversationSub)
 	mux.HandleFunc("/voyager/api/messaging/conversations", s.handleConversations)
+	mux.HandleFunc("/voyager/api/voyagerMessagingGraphQL/graphql", s.handleMessagingGraphQL)
 
 	// Connections
 	mux.HandleFunc("/voyager/api/relationships/connections", s.handleConnections)
@@ -710,6 +711,92 @@ func (s *Server) handleDashMessengerMessages(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	http.Error(w, `{"status":404}`, http.StatusNotFound)
+}
+
+// handleMessagingGraphQL handles requests to the dedicated messaging GraphQL gateway.
+func (s *Server) handleMessagingGraphQL(w http.ResponseWriter, r *http.Request) {
+	queryID := r.URL.Query().Get("queryId")
+	switch {
+	case strings.HasPrefix(queryID, "messengerConversations."):
+		writeJSON(w, map[string]interface{}{
+			"data": map[string]interface{}{
+				"messengerConversationsByCategoryQuery": map[string]interface{}{
+					"elements": []interface{}{
+						map[string]interface{}{
+							"entityUrn":      "urn:li:msg_conversation:(urn:li:fsd_profile:test-user-encoded-id,thread001)",
+							"backendUrn":     "urn:li:messagingThread:thread001",
+							"unreadCount":    0,
+							"read":           true,
+							"lastActivityAt": 1741305600000,
+							"conversationParticipants": []interface{}{
+								map[string]interface{}{
+									"hostIdentityUrn": "urn:li:fsd_profile:other-user-id",
+									"participantType": map[string]interface{}{
+										"member": map[string]interface{}{
+											"firstName": map[string]interface{}{"text": "Alice"},
+											"lastName":  map[string]interface{}{"text": "Smith"},
+										},
+									},
+								},
+								map[string]interface{}{
+									"hostIdentityUrn": "urn:li:fsd_profile:test-user-encoded-id",
+									"participantType": map[string]interface{}{
+										"member": map[string]interface{}{
+											"firstName": map[string]interface{}{"text": "Test"},
+											"lastName":  map[string]interface{}{"text": "User"},
+										},
+									},
+								},
+							},
+							"messages": map[string]interface{}{
+								"elements": []interface{}{
+									map[string]interface{}{
+										"entityUrn":  "urn:li:msg_message:msg001",
+										"deliveredAt": 1741305600000,
+										"body":        map[string]interface{}{"text": "Hi there, how are you?"},
+										"sender": map[string]interface{}{
+											"hostIdentityUrn": "urn:li:fsd_profile:other-user-id",
+											"participantType": map[string]interface{}{
+												"member": map[string]interface{}{
+													"firstName": map[string]interface{}{"text": "Alice"},
+													"lastName":  map[string]interface{}{"text": "Smith"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+	case strings.HasPrefix(queryID, "messengerMessages."):
+		writeJSON(w, map[string]interface{}{
+			"data": map[string]interface{}{
+				"messengerMessagesBySyncToken": map[string]interface{}{
+					"elements": []interface{}{
+						map[string]interface{}{
+							"entityUrn":  "urn:li:msg_message:msg001",
+							"deliveredAt": 1741305600000,
+							"body":        map[string]interface{}{"text": "Hi there, how are you?"},
+							"sender": map[string]interface{}{
+								"hostIdentityUrn": "urn:li:fsd_profile:other-user-id",
+								"participantType": map[string]interface{}{
+									"member": map[string]interface{}{
+										"firstName": map[string]interface{}{"text": "Alice"},
+										"lastName":  map[string]interface{}{"text": "Smith"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+	default:
+		http.Error(w, `{"status":404,"message":"Unknown messaging queryId"}`, http.StatusNotFound)
+	}
 }
 
 // handleGraphQL routes GraphQL requests by queryId parameter.

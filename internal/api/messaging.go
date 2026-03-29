@@ -129,15 +129,18 @@ func (s *MessagingService) listConversationsByCategory(category string, start, c
 		return nil, err
 	}
 
+	// Use the dedicated messaging GraphQL gateway with predicate-based query.
 	path := fmt.Sprintf(
-		"%s?includeWebMetadata=true&variables=(category:%s,count:%d,start:%d,mailboxUrn:%s)&queryId=%s",
-		client.EndpointGraphQL, category, count, start,
-		url.QueryEscape(profileURN),
+		"%s?queryId=%s&variables=(query:(predicateUnions:List((conversationCategoryPredicate:(category:%s)))),count:%d,mailboxUrn:%s)",
+		client.EndpointMessagingGraphQL,
 		client.EndpointMessengerConversationsQueryID,
+		category, count,
+		url.QueryEscape(profileURN),
 	)
 
 	var raw struct {
 		Data *struct {
+			// The predicate-based query returns under this key.
 			Collection *struct {
 				Elements []gqlMessengerConversation `json:"elements"`
 				Paging   struct {
@@ -145,11 +148,11 @@ func (s *MessagingService) listConversationsByCategory(category string, start, c
 					Count int `json:"count"`
 					Total int `json:"total"`
 				} `json:"paging"`
-			} `json:"messengerConversationsByCategory"`
+			} `json:"messengerConversationsByCategoryQuery"`
 		} `json:"data"`
 	}
 
-	if err := s.c.GetGraphQL(path, &raw); err != nil {
+	if err := s.c.GetMessagingGraphQL(path, &raw); err != nil {
 		return nil, fmt.Errorf("list conversations: %w", err)
 	}
 
@@ -187,11 +190,10 @@ func (s *MessagingService) GetConversation(conversationID string, start, count i
 	convURN := fmt.Sprintf("urn:li:msg_conversation:(%s,%s)", profileURN, conversationID)
 
 	path := fmt.Sprintf(
-		"%s?includeWebMetadata=true&variables=(conversationUrn:%s,count:%d)&queryId=%s",
-		client.EndpointGraphQL,
-		url.QueryEscape(convURN),
-		count,
+		"%s?queryId=%s&variables=(conversationUrn:%s)",
+		client.EndpointMessagingGraphQL,
 		client.EndpointMessengerMessagesQueryID,
+		url.QueryEscape(convURN),
 	)
 
 	var raw struct {
@@ -203,11 +205,11 @@ func (s *MessagingService) GetConversation(conversationID string, start, count i
 					Count int `json:"count"`
 					Total int `json:"total"`
 				} `json:"paging"`
-			} `json:"messengerMessagesByConversation"`
+			} `json:"messengerMessagesBySyncToken"`
 		} `json:"data"`
 	}
 
-	if err := s.c.GetGraphQL(path, &raw); err != nil {
+	if err := s.c.GetMessagingGraphQL(path, &raw); err != nil {
 		return nil, fmt.Errorf("get conversation %q: %w", conversationID, err)
 	}
 

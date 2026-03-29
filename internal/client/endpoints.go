@@ -66,11 +66,17 @@ const (
 	EndpointFollowEntity      = VoyagerAPI + "/feed/follows"
 	EndpointMutualConnections = VoyagerAPI + "/relationships/connectionOf"
 
-	// Messaging (GraphQL)
-	EndpointMessengerConversationsQueryID = "voyagerMessagingDashMessengerConversations.ccc086e11ebcecef63b31ac465ccfebd"
-	EndpointMessengerMessagesQueryID      = "voyagerMessagingDashMessengerMessages.073958b6fdfe5f5ceeb4d0416523317e"
-	EndpointMessengerMailboxCountsQueryID = "voyagerMessagingDashMessengerMailboxCounts.15769ef365ec721fc539d76dbef5f813"
+	// Messaging — reads go through the dedicated messaging GraphQL gateway,
+	// writes go through the voyagerMessagingDash REST-action endpoints.
+	EndpointMessagingGraphQL = VoyagerAPI + "/voyagerMessagingGraphQL/graphql"
 
+	// Messaging read queryIds (for EndpointMessagingGraphQL)
+	EndpointMessengerConversationsQueryID = "messengerConversations.9501074288a12f3ae9e3c7ea243bccbf"
+	EndpointMessengerConversationsSyncQueryID = "messengerConversations.0d5e6781bbee71c3e51c8843c6519f48"
+	EndpointMessengerMessagesQueryID      = "messengerMessages.5846eeb71c981f11e0134cb6626cc314"
+	EndpointMessengerMailboxCountsQueryID = "messengerMailboxCounts.fc528a5a81a76dff212a4a3d2d48e84b"
+
+	// Messaging write endpoints (REST-action style)
 	EndpointDashMessengerCreateMessage = VoyagerAPI + "/voyagerMessagingDashMessengerMessages?action=createMessage"
 
 	// Messaging (legacy — deprecated, kept for reference)

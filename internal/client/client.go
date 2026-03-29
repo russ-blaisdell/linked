@@ -261,6 +261,17 @@ func (c *Client) GetGraphQL(rawPath string, dest interface{}) error {
 	return c.do(req, dest)
 }
 
+// GetMessagingGraphQL performs a GET to the messaging-specific GraphQL endpoint.
+// Uses application/graphql Accept header (not application/json).
+func (c *Client) GetMessagingGraphQL(rawPath string, dest interface{}) error {
+	req, err := c.newRequest(http.MethodGet, rawPath, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/graphql")
+	return c.do(req, dest)
+}
+
 // Post performs a POST request with a JSON body.
 func (c *Client) Post(path string, body interface{}, dest interface{}) error {
 	req, err := c.newRequest(http.MethodPost, path, body)

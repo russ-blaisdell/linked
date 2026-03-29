@@ -24,8 +24,8 @@ func TestGetMe(t *testing.T) {
 	if profile.LastName != "Doe" {
 		t.Errorf("LastName = %q, want %q", profile.LastName, "Doe")
 	}
-	if profile.URN != "urn:li:member:123456789" {
-		t.Errorf("URN = %q, want %q", profile.URN, "urn:li:member:123456789")
+	if profile.URN != "urn:li:fsd_profile:test-user-encoded-id" {
+		t.Errorf("URN = %q, want %q", profile.URN, "urn:li:fsd_profile:test-user-encoded-id")
 	}
 	if len(profile.Experience) == 0 {
 		t.Error("expected at least one experience entry")
@@ -138,8 +138,8 @@ func TestProfileEducation(t *testing.T) {
 	if edu.SchoolName != "MIT" {
 		t.Errorf("SchoolName = %q, want %q", edu.SchoolName, "MIT")
 	}
-	if edu.Degree != "B.S." {
-		t.Errorf("Degree = %q, want %q", edu.Degree, "B.S.")
+	if edu.Degree != "BS" {
+		t.Errorf("Degree = %q, want %q", edu.Degree, "BS")
 	}
 }
 

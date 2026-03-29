@@ -2,21 +2,24 @@ package models
 
 // Profile represents a LinkedIn member profile.
 type Profile struct {
-	URN        string       `json:"urn"`
-	ProfileID  string       `json:"profileId"`
-	FirstName  string       `json:"firstName"`
-	LastName   string       `json:"lastName"`
-	Headline   string       `json:"headline"`
-	Summary    string       `json:"summary"`
-	Location   string       `json:"location"`
-	Industry   string       `json:"industry"`
-	PhotoURL   string       `json:"photoUrl,omitempty"`
-	PublicURL  string       `json:"publicUrl,omitempty"`
-	Connection string       `json:"connection,omitempty"` // FIRST_DEGREE, SECOND_DEGREE, etc.
-	Experience []Experience `json:"experience,omitempty"`
-	Education  []Education  `json:"education,omitempty"`
-	Skills     []Skill      `json:"skills,omitempty"`
-	Languages  []Language   `json:"languages,omitempty"`
+	URN            string          `json:"urn"`
+	ProfileID      string          `json:"profileId"`
+	FirstName      string          `json:"firstName"`
+	LastName       string          `json:"lastName"`
+	Headline       string          `json:"headline"`
+	Summary        string          `json:"summary"`
+	Location       string          `json:"location"`
+	Industry       string          `json:"industry"`
+	PhotoURL       string          `json:"photoUrl,omitempty"`
+	PublicURL      string          `json:"publicUrl,omitempty"`
+	Connection     string          `json:"connection,omitempty"` // FIRST_DEGREE, SECOND_DEGREE, etc.
+	Experience     []Experience    `json:"experience,omitempty"`
+	Education      []Education     `json:"education,omitempty"`
+	Skills         []Skill         `json:"skills,omitempty"`
+	Languages      []Language      `json:"languages,omitempty"`
+	Certifications []Certification `json:"certifications,omitempty"`
+	Publications   []Publication   `json:"publications,omitempty"`
+	Patents        []Patent        `json:"patents,omitempty"`
 }
 
 // ContactInfo holds profile contact details.
@@ -108,6 +111,16 @@ type Publication struct {
 	Name        string `json:"name"`
 	Publisher   string `json:"publisher,omitempty"`
 	PublishedOn string `json:"publishedOn,omitempty"`
+	URL         string `json:"url,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// Patent is a patent on a profile.
+type Patent struct {
+	ID          string `json:"id,omitempty"`
+	Title       string `json:"title"`
+	Issuer      string `json:"issuer,omitempty"`
+	Number      string `json:"number,omitempty"`
 	URL         string `json:"url,omitempty"`
 	Description string `json:"description,omitempty"`
 }

@@ -1555,6 +1555,54 @@ func printProfile(p *output.Printer, profile *models.Profile) {
 			p.Println()
 		}
 	}
+
+	if len(profile.Skills) > 0 {
+		p.Println()
+		p.Header("Skills")
+		for _, sk := range profile.Skills {
+			p.Printf("  %s\n", sk.Name)
+		}
+	}
+
+	if len(profile.Certifications) > 0 {
+		p.Println()
+		p.Header("Certifications")
+		for _, cert := range profile.Certifications {
+			p.Printf("  %s", cert.Name)
+			if cert.Authority != "" {
+				p.Printf(" (%s)", cert.Authority)
+			}
+			p.Println()
+		}
+	}
+
+	if len(profile.Languages) > 0 {
+		p.Println()
+		p.Header("Languages")
+		for _, lang := range profile.Languages {
+			p.Printf("  %s", lang.Name)
+			if lang.Proficiency != "" {
+				p.Printf(" — %s", lang.Proficiency)
+			}
+			p.Println()
+		}
+	}
+
+	if len(profile.Publications) > 0 {
+		p.Println()
+		p.Header("Publications")
+		for _, pub := range profile.Publications {
+			p.Printf("  %s\n", pub.Name)
+		}
+	}
+
+	if len(profile.Patents) > 0 {
+		p.Println()
+		p.Header("Patents")
+		for _, pat := range profile.Patents {
+			p.Printf("  %s\n", pat.Title)
+		}
+	}
 }
 
 // wordWrap inserts newlines to wrap text at maxWidth characters.

@@ -89,19 +89,36 @@ type voyagerIDResponse struct {
 	ID string `json:"id,omitempty"`
 }
 
-// GetMe returns the authenticated user's own profile.
+// GetMe returns the authenticated user's full profile including all sections.
 func (s *ProfileService) GetMe() (*models.Profile, error) {
-	var raw voyagerNormalizedEnvelope
-	if err := s.c.Get(client.EndpointMe, nil, &raw); err != nil {
+	// First get the fsd_profile URN from /me.
+	var meRaw struct {
+		Included []json.RawMessage `json:"included"`
+	}
+	if err := s.c.Get(client.EndpointMe, nil, &meRaw); err != nil {
 		return nil, fmt.Errorf("get me: %w", err)
 	}
-	return extractProfileFromEnvelope(raw)
+	var profileURN string
+	for _, inc := range meRaw.Included {
+		var peek struct {
+			DashEntityURN string `json:"dashEntityUrn"`
+		}
+		if json.Unmarshal(inc, &peek) == nil && strings.Contains(peek.DashEntityURN, "fsd_profile") {
+			profileURN = peek.DashEntityURN
+			break
+		}
+	}
+	if profileURN == "" {
+		return nil, fmt.Errorf("could not determine profile URN")
+	}
+
+	return s.getFullProfile(profileURN)
 }
 
 // GetProfile returns a profile by public identifier (e.g. "john-doe") or
-// encoded member ID (e.g. "ACoAABJqo7MBm..."). Uses the dash profiles
-// endpoint since the legacy /identity/profiles endpoint returns 410.
+// encoded member ID (e.g. "ACoAABJqo7MBm...").
 func (s *ProfileService) GetProfile(profileID string) (*models.Profile, error) {
+	// First resolve the profileID to an fsd_profile URN.
 	params := map[string]string{
 		"q":              "memberIdentity",
 		"memberIdentity": profileID,
@@ -119,33 +136,205 @@ func (s *ProfileService) GetProfile(profileID string) (*models.Profile, error) {
 		return nil, fmt.Errorf("profile not found: %s", profileID)
 	}
 
-	// Extract profile from the included entities.
-	for _, inc := range raw.Included {
-		var p struct {
+	// The element URN is the fsd_profile URN.
+	profileURN := raw.Data.Elements[0]
+	return s.getFullProfile(profileURN)
+}
+
+// getFullProfile fetches a complete profile with all sections (experience,
+// education, skills, etc.) using the FullProfileWithEntities decoration.
+func (s *ProfileService) getFullProfile(profileURN string) (*models.Profile, error) {
+	path := fmt.Sprintf("%s/%s?decorationId=%s",
+		client.EndpointDashProfiles, profileURN, client.EndpointFullProfileDecoration)
+
+	var raw struct {
+		Data     json.RawMessage   `json:"data"`
+		Included []json.RawMessage `json:"included"`
+	}
+	if err := s.c.Get(path, nil, &raw); err != nil {
+		return nil, fmt.Errorf("get full profile: %w", err)
+	}
+
+	// Parse main profile data.
+	var mainData struct {
+		Data *struct {
 			EntityURN        string `json:"entityUrn"`
+			ObjectURN        string `json:"objectUrn"`
 			FirstName        string `json:"firstName"`
 			LastName         string `json:"lastName"`
 			Headline         string `json:"headline"`
 			Summary          string `json:"summary"`
 			PublicIdentifier string `json:"publicIdentifier"`
-			GeoLocationName  string `json:"geoLocationName"`
-			IndustryName     string `json:"industryName"`
-		}
-		if json.Unmarshal(inc, &p) != nil || p.FirstName == "" {
-			continue
-		}
-		return &models.Profile{
-			URN:       p.EntityURN,
-			ProfileID: p.PublicIdentifier,
-			FirstName: p.FirstName,
-			LastName:  p.LastName,
-			Headline:  p.Headline,
-			Summary:   p.Summary,
-			Location:  p.GeoLocationName,
-			Industry:  p.IndustryName,
-		}, nil
+			IndustryURN      string `json:"industryUrn"`
+			GeoLocation      *struct {
+				GeoURN string `json:"geoUrn"`
+			} `json:"geoLocation"`
+		} `json:"data"`
 	}
-	return nil, fmt.Errorf("profile data not found for: %s", profileID)
+	json.Unmarshal(raw.Data, &mainData)
+
+	// Also try flat structure (response varies).
+	var flatData struct {
+		EntityURN        string `json:"entityUrn"`
+		FirstName        string `json:"firstName"`
+		LastName         string `json:"lastName"`
+		Headline         string `json:"headline"`
+		Summary          string `json:"summary"`
+		PublicIdentifier string `json:"publicIdentifier"`
+	}
+	json.Unmarshal(raw.Data, &flatData)
+
+	profile := &models.Profile{}
+	if mainData.Data != nil {
+		profile.URN = mainData.Data.EntityURN
+		profile.ProfileID = mainData.Data.PublicIdentifier
+		profile.FirstName = mainData.Data.FirstName
+		profile.LastName = mainData.Data.LastName
+		profile.Headline = mainData.Data.Headline
+		profile.Summary = mainData.Data.Summary
+	} else if flatData.FirstName != "" {
+		profile.URN = flatData.EntityURN
+		profile.ProfileID = flatData.PublicIdentifier
+		profile.FirstName = flatData.FirstName
+		profile.LastName = flatData.LastName
+		profile.Headline = flatData.Headline
+		profile.Summary = flatData.Summary
+	}
+
+	// Parse included entities by type.
+	for _, inc := range raw.Included {
+		var peek struct {
+			Type string `json:"$type"`
+		}
+		json.Unmarshal(inc, &peek)
+		typeName := peek.Type
+		if idx := strings.LastIndex(typeName, "."); idx >= 0 {
+			typeName = typeName[idx+1:]
+		}
+
+		switch typeName {
+		case "Position":
+			var p struct {
+				Title       string `json:"title"`
+				CompanyName string `json:"companyName"`
+				Location    string `json:"locationName"`
+				Description string `json:"description"`
+				DateRange   *struct {
+					Start *struct {
+						Month int `json:"month"`
+						Year  int `json:"year"`
+					} `json:"start"`
+					End *struct {
+						Month int `json:"month"`
+						Year  int `json:"year"`
+					} `json:"end"`
+				} `json:"dateRange"`
+			}
+			if json.Unmarshal(inc, &p) == nil && p.Title != "" {
+				exp := models.Experience{
+					Title:       p.Title,
+					CompanyName: p.CompanyName,
+					Location:    p.Location,
+					Description: p.Description,
+				}
+				if p.DateRange != nil && p.DateRange.Start != nil {
+					exp.StartDate = fmt.Sprintf("%d-%02d", p.DateRange.Start.Year, p.DateRange.Start.Month)
+					exp.Current = p.DateRange.End == nil
+					if p.DateRange.End != nil {
+						exp.EndDate = fmt.Sprintf("%d-%02d", p.DateRange.End.Year, p.DateRange.End.Month)
+					}
+				}
+				profile.Experience = append(profile.Experience, exp)
+			}
+
+		case "Education":
+			var e struct {
+				SchoolName   string `json:"schoolName"`
+				DegreeName   string `json:"degreeName"`
+				FieldOfStudy string `json:"fieldOfStudy"`
+				Description  string `json:"description"`
+			}
+			if json.Unmarshal(inc, &e) == nil && e.SchoolName != "" {
+				field := e.FieldOfStudy
+				if field == "" {
+					field = e.Description
+				}
+				profile.Education = append(profile.Education, models.Education{
+					SchoolName:   e.SchoolName,
+					Degree:       e.DegreeName,
+					FieldOfStudy: field,
+				})
+			}
+
+		case "Skill":
+			var sk struct {
+				Name string `json:"name"`
+			}
+			if json.Unmarshal(inc, &sk) == nil && sk.Name != "" {
+				profile.Skills = append(profile.Skills, models.Skill{Name: sk.Name})
+			}
+
+		case "Language":
+			var l struct {
+				Name        string `json:"name"`
+				Proficiency string `json:"proficiency"`
+			}
+			if json.Unmarshal(inc, &l) == nil && l.Name != "" {
+				profile.Languages = append(profile.Languages, models.Language{
+					Name: l.Name, Proficiency: l.Proficiency,
+				})
+			}
+
+		case "Certification":
+			var c struct {
+				Name      string `json:"name"`
+				Authority string `json:"authority"`
+			}
+			if json.Unmarshal(inc, &c) == nil && c.Name != "" {
+				profile.Certifications = append(profile.Certifications, models.Certification{
+					Name: c.Name, Authority: c.Authority,
+				})
+			}
+
+		case "Publication":
+			var pub struct {
+				Name string `json:"name"`
+			}
+			if json.Unmarshal(inc, &pub) == nil && pub.Name != "" {
+				profile.Publications = append(profile.Publications, models.Publication{
+					Name: pub.Name,
+				})
+			}
+
+		case "Patent":
+			var pat struct {
+				Title string `json:"title"`
+			}
+			if json.Unmarshal(inc, &pat) == nil && pat.Title != "" {
+				profile.Patents = append(profile.Patents, models.Patent{
+					Title: pat.Title,
+				})
+			}
+
+		case "Industry":
+			var ind struct {
+				Name string `json:"name"`
+			}
+			if json.Unmarshal(inc, &ind) == nil && ind.Name != "" {
+				profile.Industry = ind.Name
+			}
+
+		case "Geo":
+			var geo struct {
+				DefaultLocalizedName string `json:"defaultLocalizedName"`
+			}
+			if json.Unmarshal(inc, &geo) == nil && geo.DefaultLocalizedName != "" && profile.Location == "" {
+				profile.Location = geo.DefaultLocalizedName
+			}
+		}
+	}
+
+	return profile, nil
 }
 
 // GetContactInfo returns contact information for a profile.

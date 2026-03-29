@@ -10,7 +10,8 @@ const (
 
 	// Identity / Profiles
 	EndpointProfiles       = VoyagerAPI + "/identity/profiles"
-	EndpointDashProfiles   = VoyagerAPI + "/identity/dash/profiles"
+	EndpointDashProfiles          = VoyagerAPI + "/identity/dash/profiles"
+	EndpointFullProfileDecoration = "com.linkedin.voyager.dash.deco.identity.profile.FullProfileWithEntities-93"
 	EndpointProfileContact = VoyagerAPI + "/identity/profiles/%s/profileContactInfo"
 	EndpointProfileView    = VoyagerAPI + "/identity/profiles/%s/profileView"
 	EndpointMe             = VoyagerAPI + "/me"

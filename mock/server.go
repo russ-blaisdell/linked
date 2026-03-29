@@ -118,6 +118,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/voyager/api/relationships/dash/connections", s.handleDashConnections)
 
 	// Profiles (dash)
+	mux.HandleFunc("/voyager/api/identity/dash/profiles/", s.handleDashProfiles)
 	mux.HandleFunc("/voyager/api/identity/dash/profiles", s.handleDashProfiles)
 	mux.HandleFunc("/voyager/api/relationships/invitationViews", s.handleInvitations)
 	mux.HandleFunc("/voyager/api/relationships/sentInvitationViewsV2", s.handleSentInvitations)
@@ -348,8 +349,14 @@ func (s *Server) handleDashConnections(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDashProfiles(w http.ResponseWriter, r *http.Request) {
+	// Full profile with decoration: /identity/dash/profiles/urn:li:fsd_profile:...?decorationId=...
+	if r.URL.Query().Get("decorationId") != "" {
+		s.handleFullProfile(w, r)
+		return
+	}
+
 	memberID := r.URL.Query().Get("memberIdentity")
-	// Return a mock profile for any memberIdentity
+	// Return a mock profile for any memberIdentity (used by connections resolution)
 	firstName := "Jane"
 	lastName := "Doe"
 	headline := "Engineering Manager"
@@ -375,6 +382,84 @@ func (s *Server) handleDashProfiles(w http.ResponseWriter, r *http.Request) {
 				"headline":         headline,
 				"publicIdentifier": publicID,
 				"$type":            "com.linkedin.voyager.dash.identity.profile.Profile",
+			},
+		},
+	})
+}
+
+func (s *Server) handleFullProfile(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, map[string]interface{}{
+		"data": map[string]interface{}{
+			"data": map[string]interface{}{
+				"entityUrn":        "urn:li:fsd_profile:test-user-encoded-id",
+				"firstName":        "Jane",
+				"lastName":         "Doe",
+				"headline":         "Senior Software Engineer at Acme Corp",
+				"summary":          "Passionate software engineer with 10+ years of experience.",
+				"publicIdentifier": "jane-doe",
+				"objectUrn":        "urn:li:member:123456789",
+			},
+		},
+		"included": []interface{}{
+			map[string]interface{}{
+				"$type":       "com.linkedin.voyager.dash.identity.profile.Position",
+				"title":       "Senior Software Engineer",
+				"companyName": "Acme Corp",
+				"description": "Lead engineer on the platform team.",
+				"locationName": "San Francisco, CA",
+				"dateRange": map[string]interface{}{
+					"start": map[string]interface{}{"month": 1, "year": 2020},
+				},
+			},
+			map[string]interface{}{
+				"$type":       "com.linkedin.voyager.dash.identity.profile.Position",
+				"title":       "Software Engineer",
+				"companyName": "StartupCo",
+				"description": "Full-stack development.",
+				"dateRange": map[string]interface{}{
+					"start": map[string]interface{}{"month": 6, "year": 2015},
+					"end":   map[string]interface{}{"month": 12, "year": 2019},
+				},
+			},
+			map[string]interface{}{
+				"$type":      "com.linkedin.voyager.dash.identity.profile.Education",
+				"schoolName": "MIT",
+				"degreeName": "BS",
+				"fieldOfStudy": "Computer Science",
+			},
+			map[string]interface{}{
+				"$type": "com.linkedin.voyager.dash.identity.profile.Skill",
+				"name":  "Go",
+			},
+			map[string]interface{}{
+				"$type": "com.linkedin.voyager.dash.identity.profile.Skill",
+				"name":  "Python",
+			},
+			map[string]interface{}{
+				"$type": "com.linkedin.voyager.dash.identity.profile.Skill",
+				"name":  "Distributed Systems",
+			},
+			map[string]interface{}{
+				"$type": "com.linkedin.voyager.dash.identity.profile.Language",
+				"name":  "English",
+				"proficiency": "NATIVE_OR_BILINGUAL",
+			},
+			map[string]interface{}{
+				"$type":     "com.linkedin.voyager.dash.identity.profile.Certification",
+				"name":      "AWS Solutions Architect",
+				"authority":  "Amazon Web Services",
+			},
+			map[string]interface{}{
+				"$type": "com.linkedin.voyager.dash.identity.profile.Patent",
+				"title": "Method for distributed cache invalidation",
+			},
+			map[string]interface{}{
+				"$type":                  "com.linkedin.voyager.dash.common.Geo",
+				"defaultLocalizedName":   "San Francisco, California, United States",
+			},
+			map[string]interface{}{
+				"$type": "com.linkedin.voyager.dash.common.Industry",
+				"name":  "Software Development",
 			},
 		},
 	})
